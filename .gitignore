@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.vercel
+*.tsbuildinfo
+*.log
+
+# env files (keep the template)
+.env
+.env.*
+!.env.example

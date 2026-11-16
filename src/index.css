@@ -1,0 +1,288 @@
+@import url('https://fonts.googleapis.com/css2?family=Doto:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=VT323&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+/* Classic (default) — the original black + ember orange look. Every other
+   theme below overrides these same tokens on <html data-theme="…">. */
+@theme {
+  --font-display: 'Doto', 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #000000;
+  --color-panel: rgba(255, 255, 255, 0.035);
+  --color-panel-2: rgba(255, 255, 255, 0.06);
+  --color-line: rgba(255, 255, 255, 0.1);
+  --color-line-soft: rgba(255, 255, 255, 0.055);
+  --color-fg: #ffffff;
+  --color-muted: #8a8a90;
+  --color-faint: #55555c;
+
+  /* signature accent — used as solid inverted blocks with dark text */
+  --color-orange: #ff6f42;
+  --color-orange-ink: #1a0d07;
+  --color-orange-soft: rgba(255, 111, 66, 0.14);
+  --color-amber: #f5a524;
+  --color-lime: #9bd633;
+  --color-lime-ink: #0d1a02;
+  --color-cyan: #35d6c4;
+  --color-bar-off: rgba(255, 255, 255, 0.09);
+
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+}
+
+:root {
+  color-scheme: dark;
+  --app-bg: var(--color-ink);
+  --top-glow: radial-gradient(60% 100% at 50% 0%, rgba(255, 111, 66, 0.1), transparent 70%);
+  --glow-strength: 1;
+  --surface-shadow: none;
+  --surface-blur: none;
+  --surface-border: 1px;
+  --display-weight: 700;
+  --display-shadow: none;
+}
+
+/* ── Midnight Glass ─ frosted panels floating over a deep navy aurora ── */
+:root[data-theme='glass'] {
+  --font-display: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #060a17;
+  --color-panel: rgba(255, 255, 255, 0.055);
+  --color-panel-2: rgba(255, 255, 255, 0.07);
+  --color-line: rgba(255, 255, 255, 0.13);
+  --color-line-soft: rgba(255, 255, 255, 0.07);
+  --color-fg: #eef2ff;
+  --color-muted: #a3abc6;
+  --color-faint: #6c7594;
+  --color-orange: #ff7a90;
+  --color-orange-ink: #1a0610;
+  --color-orange-soft: rgba(255, 122, 144, 0.14);
+  --color-amber: #fcd34d;
+  --color-lime: #6ee7b7;
+  --color-lime-ink: #032016;
+  --color-cyan: #7dd3fc;
+  --color-bar-off: rgba(255, 255, 255, 0.1);
+
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
+
+  --app-bg:
+    radial-gradient(60% 50% at 10% 0%, rgba(56, 120, 255, 0.22), transparent 70%),
+    radial-gradient(50% 45% at 100% 30%, rgba(45, 212, 191, 0.14), transparent 70%),
+    radial-gradient(50% 40% at 40% 100%, rgba(255, 122, 144, 0.12), transparent 70%),
+    #060a17;
+  --top-glow: none;
+  --glow-strength: 0.35;
+  --surface-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 20px 50px -20px rgba(0, 0, 0, 0.6);
+  --surface-blur: blur(20px) saturate(150%);
+  --display-weight: 600;
+}
+
+/* ── Neo Brutal ─ sunshine yellow, chunky ink borders, hard offset shadows ── */
+:root[data-theme='brutal'] {
+  color-scheme: light;
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #ffde59;
+  --color-panel: #ffffff;
+  --color-panel-2: #fff6cc;
+  --color-line: #111111;
+  --color-line-soft: rgba(17, 17, 17, 0.22);
+  --color-fg: #111111;
+  --color-muted: #3d3d3d;
+  --color-faint: #5c5c5c;
+  --color-orange: #ff4f7b;
+  --color-orange-ink: #111111;
+  --color-orange-soft: rgba(255, 79, 123, 0.18);
+  --color-amber: #ff8a00;
+  --color-lime: #2fd27a;
+  --color-lime-ink: #111111;
+  --color-cyan: #3b6cff;
+  --color-bar-off: rgba(17, 17, 17, 0.12);
+
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+
+  --app-bg: #ffde59;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 6px 6px 0 #111111;
+  --surface-border: 2px;
+  --display-weight: 700;
+}
+
+/* ── Sage Daylight ─ airy, soft-light workspace with calm greens ── */
+:root[data-theme='sage'] {
+  color-scheme: light;
+  --font-display: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #e9eee8;
+  --color-panel: #fbfcfa;
+  --color-panel-2: #f1f4ef;
+  --color-line: rgba(28, 52, 38, 0.13);
+  --color-line-soft: rgba(28, 52, 38, 0.08);
+  --color-fg: #15241b;
+  --color-muted: #52635a;
+  --color-faint: #6f7f76;
+  --color-orange: #e2603f;
+  --color-orange-ink: #ffffff;
+  --color-orange-soft: rgba(226, 96, 63, 0.12);
+  --color-amber: #b7791f;
+  --color-lime: #2f8f57;
+  --color-lime-ink: #ffffff;
+  --color-cyan: #2a7fa3;
+  --color-bar-off: rgba(28, 52, 38, 0.1);
+
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+
+  --app-bg: linear-gradient(180deg, #f2f5f0 0%, #e6ece5 100%);
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 0 1px 2px rgba(21, 36, 27, 0.04), 0 12px 32px -16px rgba(21, 36, 27, 0.18);
+  --display-weight: 800;
+}
+
+/* ── Phosphor CRT ─ amber terminal glow, scanlines, pixel type ── */
+:root[data-theme='crt'] {
+  --font-display: 'VT323', 'IBM Plex Mono', monospace;
+  --font-sans: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-ink: #0b0800;
+  --color-panel: rgba(255, 176, 0, 0.035);
+  --color-panel-2: rgba(255, 176, 0, 0.06);
+  --color-line: rgba(255, 176, 0, 0.28);
+  --color-line-soft: rgba(255, 176, 0, 0.14);
+  --color-fg: #ffcf70;
+  --color-muted: #d39a35;
+  --color-faint: #9a7028;
+  --color-orange: #ffb000;
+  --color-orange-ink: #140d00;
+  --color-orange-soft: rgba(255, 176, 0, 0.14);
+  --color-amber: #ff6a3d;
+  --color-lime: #a6ff6b;
+  --color-lime-ink: #071300;
+  --color-cyan: #7af0ff;
+  --color-bar-off: rgba(255, 176, 0, 0.1);
+
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
+  --radius-2xl: 4px;
+
+  --app-bg: radial-gradient(120% 90% at 50% 40%, #1a1200 0%, #0b0800 60%, #050300 100%);
+  --top-glow: none;
+  --glow-strength: 0.25;
+  --surface-shadow: 0 0 0 1px rgba(255, 176, 0, 0.05), 0 0 28px -6px rgba(255, 176, 0, 0.18);
+  --display-weight: 400;
+  --display-shadow: 0 0 10px rgba(255, 176, 0, 0.55);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  background-attachment: fixed;
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.bg-app {
+  background: var(--app-bg);
+  background-attachment: fixed;
+}
+
+.top-glow {
+  background: var(--top-glow);
+}
+
+/* Applied to every main card so each theme can give it its own material. */
+.surface {
+  box-shadow: var(--surface-shadow);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
+  border-width: var(--surface-border);
+}
+
+:root[data-theme='crt'] body::after {
+  content: '';
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.22) 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+::selection {
+  background: var(--color-orange);
+  color: var(--color-orange-ink);
+}
+
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.tracked {
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-shadow: var(--display-shadow);
+}
+
+:root[data-theme='crt'] .display {
+  letter-spacing: 0.02em;
+}
+
+@keyframes emberpulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.ember-pulse {
+  animation: emberpulse 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ember-pulse {
+    animation: none;
+  }
+}
