@@ -28,6 +28,8 @@ import {
   requestNotify,
   scheduleNotification,
 } from "./lib/notifications";
+import { saveDailySnapshot, snapshotDay } from "./lib/history";
+import MonthlyProgress from "./components/MonthlyProgress";
 
 // Quick presets, in minutes — mirrors the fast-select menu.
 const QUICK = [
@@ -223,6 +225,14 @@ export default function App() {
       return changed ? next : prev;
     });
   }, [now]);
+
+  // Snapshot today's stats whenever tasks change, so monthly history builds up.
+  useEffect(() => {
+    if (tasks.length === 0) return;
+    const today = dayKey(Date.now());
+    const snapshot = snapshotDay(tasks, today);
+    saveDailySnapshot(snapshot);
+  }, [tasks]);
 
   const totalMinutes = hours * 60 + minutes;
   const fireClock = fmtClock(now + totalMinutes * 60_000);
@@ -510,6 +520,14 @@ export default function App() {
         <aside className="lg:sticky lg:top-12 lg:self-start">
           <CycleMeter tasks={tasks} now={now} />
 
+          <TodoList
+            onUse={(text) => {
+              setTitle(text);
+              titleRef.current?.focus();
+              titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
+
           <div className="surface relative isolate mt-6 overflow-hidden rounded-2xl border border-line bg-panel">
             <CornerGlow />
             <div className="flex items-center gap-2 border-b border-line-soft px-5 py-3">
@@ -574,13 +592,7 @@ export default function App() {
             </div>
           </div>
 
-          <TodoList
-            onUse={(text) => {
-              setTitle(text);
-              titleRef.current?.focus();
-              titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }}
-          />
+          <MonthlyProgress />
         </aside>
       </div>
     </div>
