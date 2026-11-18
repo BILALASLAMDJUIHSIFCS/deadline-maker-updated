@@ -30,6 +30,7 @@ import {
 } from "./lib/notifications";
 import { saveDailySnapshot, snapshotDay } from "./lib/history";
 import MonthlyProgress from "./components/MonthlyProgress";
+import FullscreenTimer, { MiniFloat } from "./components/FullscreenTimer";
 
 // Quick presets, in minutes — mirrors the fast-select menu.
 const QUICK = [
@@ -92,6 +93,8 @@ export default function App() {
   const [flash, setFlash] = useState<string | null>(null);
   const [showAllResolved, setShowAllResolved] = useState(false);
   const [theme, setTheme] = useState<ThemeId>(() => loadThemePref().theme);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [miniId, setMiniId] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   // Tasks whose final-10s warning has already sounded, so it fires only once.
   const warned = useRef<Set<string>>(new Set());
@@ -465,7 +468,14 @@ export default function App() {
           <div className="mt-4 space-y-3">
             <AnimatePresence initial={false}>
               {active.map((t) => (
-                <TaskCard key={t.id} task={t} now={now} onDone={() => completeTask(t.id)} />
+                <TaskCard
+                  key={t.id}
+                  task={t}
+                  now={now}
+                  onDone={() => completeTask(t.id)}
+                  onExpand={() => setExpandedId(t.id)}
+                  onMini={() => setMiniId(t.id)}
+                />
               ))}
             </AnimatePresence>
             {active.length === 0 && (
@@ -595,6 +605,36 @@ export default function App() {
           <MonthlyProgress />
         </aside>
       </div>
+
+      {/* ── Fullscreen timer overlay ─────────────────── */}
+      <AnimatePresence>
+        {expandedId && (() => {
+          const t = tasks.find((x) => x.id === expandedId);
+          return t ? (
+            <FullscreenTimer
+              key={t.id}
+              task={t}
+              onDone={() => completeTask(t.id)}
+              onClose={() => setExpandedId(null)}
+            />
+          ) : null;
+        })()}
+      </AnimatePresence>
+
+      {/* ── Floating mini timer ──────────────────────── */}
+      <AnimatePresence>
+        {miniId && !expandedId && (() => {
+          const t = tasks.find((x) => x.id === miniId);
+          return t ? (
+            <MiniFloat
+              key={t.id}
+              task={t}
+              onDone={() => completeTask(t.id)}
+              onClose={() => setMiniId(null)}
+            />
+          ) : null;
+        })()}
+      </AnimatePresence>
     </div>
   );
 }
@@ -665,7 +705,7 @@ function Header({
   );
 }
 
-function TaskCard({ task, now, onDone }: { task: Task; now: number; onDone?: () => void }) {
+function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: number; onDone?: () => void; onExpand?: () => void; onMini?: () => void }) {
   const total = task.deadline - task.createdAt;
   const elapsed = Math.min(total, now - task.createdAt);
   const remaining = task.deadline - now;
@@ -714,14 +754,34 @@ function TaskCard({ task, now, onDone }: { task: Task; now: number; onDone?: () 
             {missed ? "missed" : "done"}
           </span>
         ) : (
-          onDone && (
-            <button
-              onClick={onDone}
-              className="tracked rounded-md border border-line px-3 py-1.5 text-[9px] text-muted transition-colors hover:border-lime hover:text-lime"
-            >
-              mark done
-            </button>
-          )
+          <div className="flex items-center gap-1.5">
+            {onMini && (
+              <button
+                onClick={onMini}
+                title="Floating mini timer"
+                className="tracked rounded-md border border-line px-2 py-1.5 text-[9px] text-muted transition-colors hover:border-cyan hover:text-cyan"
+              >
+                📌
+              </button>
+            )}
+            {onExpand && (
+              <button
+                onClick={onExpand}
+                title="Fullscreen timer"
+                className="tracked rounded-md border border-line px-2 py-1.5 text-[9px] text-muted transition-colors hover:border-cyan hover:text-cyan"
+              >
+                ⛶
+              </button>
+            )}
+            {onDone && (
+              <button
+                onClick={onDone}
+                className="tracked rounded-md border border-line px-3 py-1.5 text-[9px] text-muted transition-colors hover:border-lime hover:text-lime"
+              >
+                mark done
+              </button>
+            )}
+          </div>
         )}
       </div>
 
