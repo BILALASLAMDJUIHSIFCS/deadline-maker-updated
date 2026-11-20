@@ -679,18 +679,11 @@ function Header({
 }) {
   return (
     <header className="flex flex-wrap items-center gap-4">
-      <div className="flex items-center gap-3.5 min-w-0">
-        <img
-          src="/app-icon.png"
-          alt="Deadline Maker logo"
-          className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-contain drop-shadow-md select-none shrink-0"
-        />
-        <div className="min-w-0">
-          <h1 className="display flex items-center text-3xl font-extrabold tracking-tight text-fg sm:text-[40px]">
-            DEADLINE<span className="text-orange">//</span>MAKER
-          </h1>
-          <p className="mt-1 tracked text-[10px] text-muted">set the time — name the stakes — beat the clock</p>
-        </div>
+      <div className="min-w-0">
+        <h1 className="display flex items-center text-3xl font-extrabold tracking-tight text-fg sm:text-[40px]">
+          DEADLINE<span className="text-orange">//</span>MAKER
+        </h1>
+        <p className="mt-1 tracked text-[10px] text-muted">set the time — name the stakes — beat the clock</p>
       </div>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <ThemePicker value={theme} onChange={onTheme} />
