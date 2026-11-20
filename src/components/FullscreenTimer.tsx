@@ -306,10 +306,217 @@ function PipButton({ task, onDone }: { task: Task; onDone: () => void }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   MiniFloat — draggable in-page floating timer (PiP fallback)
+   MiniFloat — uses Document PiP API to float OUTSIDE the browser tab.
+   Falls back to a draggable in-page widget when PiP is unavailable.
    ═══════════════════════════════════════════════════════════════════════ */
 
 export function MiniFloat({
+  task,
+  onDone,
+  onClose,
+}: {
+  task: Task;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const pipRef = useRef<Window | null>(null);
+  const intervalRef = useRef<number | undefined>(undefined);
+  const launched = useRef(false);
+
+  const hasPip =
+    typeof window !== "undefined" && !!window.documentPictureInPicture;
+
+  const cleanup = useCallback(() => {
+    if (intervalRef.current) window.clearInterval(intervalRef.current);
+    intervalRef.current = undefined;
+    pipRef.current = null;
+  }, []);
+
+  // Auto-close when the task finishes
+  useEffect(() => {
+    if (task.status !== "active") {
+      pipRef.current?.close();
+      cleanup();
+      onClose();
+    }
+  }, [task.status, onClose, cleanup]);
+
+  // On unmount, close the PiP window
+  useEffect(
+    () => () => {
+      cleanup();
+      pipRef.current?.close();
+    },
+    [cleanup]
+  );
+
+  // Launch PiP on mount (only once)
+  useEffect(() => {
+    if (launched.current) return;
+    launched.current = true;
+
+    if (!hasPip) return; // fall through to in-page fallback
+
+    void (async () => {
+      try {
+        const pip = await window.documentPictureInPicture!.requestWindow({
+          width: 340,
+          height: 220,
+        });
+        pipRef.current = pip;
+
+        pip.document.head.innerHTML = `
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              background: #0a0a0a;
+              color: #ffffff;
+              font-family: 'JetBrains Mono', ui-monospace, monospace;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              overflow: hidden;
+              user-select: none;
+            }
+            .title {
+              font-size: 11px;
+              letter-spacing: 0.16em;
+              text-transform: uppercase;
+              color: #8a8a90;
+              max-width: 90%;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              text-align: center;
+            }
+            .timer {
+              font-family: 'Doto', 'JetBrains Mono', ui-monospace, monospace;
+              font-size: 52px;
+              font-weight: 700;
+              line-height: 1;
+              margin-top: 8px;
+              font-variant-numeric: tabular-nums;
+            }
+            .timer.cyan { color: #35d6c4; }
+            .timer.amber { color: #f5a524; }
+            .timer.red { color: #ff6f42; }
+            .bar-track {
+              width: 85%;
+              height: 5px;
+              background: rgba(255,255,255,0.09);
+              border-radius: 3px;
+              margin-top: 12px;
+              overflow: hidden;
+            }
+            .bar-fill {
+              height: 100%;
+              border-radius: 3px;
+              transition: width 0.3s ease, background 0.3s ease;
+            }
+            .bar-fill.cyan { background: #35d6c4; }
+            .bar-fill.amber { background: #f5a524; }
+            .bar-fill.red { background: #ff6f42; }
+            .actions { display: flex; gap: 8px; margin-top: 12px; }
+            .btn {
+              font-family: 'JetBrains Mono', ui-monospace, monospace;
+              font-size: 10px;
+              letter-spacing: 0.14em;
+              text-transform: uppercase;
+              padding: 5px 16px;
+              border-radius: 6px;
+              cursor: pointer;
+            }
+            .btn-done {
+              border: 1px solid #9bd633;
+              background: transparent;
+              color: #9bd633;
+            }
+            .btn-done:hover { background: #9bd633; color: #0d1a02; }
+            .btn-close {
+              border: 1px solid #444;
+              background: transparent;
+              color: #888;
+            }
+            .btn-close:hover { border-color: #ff6f42; color: #ff6f42; }
+          </style>
+        `;
+
+        pip.document.body.innerHTML = `
+          <div class="title">${task.title.replace(/</g, "&lt;")}</div>
+          <div id="clock" class="timer cyan">00:00:00</div>
+          <div class="bar-track"><div id="bar" class="bar-fill cyan" style="width:0%"></div></div>
+          <div class="actions">
+            <button id="done-btn" class="btn btn-done">✓ done</button>
+            <button id="close-btn" class="btn btn-close">✕</button>
+          </div>
+        `;
+
+        pip.document
+          .getElementById("done-btn")
+          ?.addEventListener("click", () => {
+            onDone();
+            pip.close();
+          });
+
+        pip.document
+          .getElementById("close-btn")
+          ?.addEventListener("click", () => {
+            pip.close();
+          });
+
+        // Update loop
+        const update = () => {
+          const now = Date.now();
+          const rem = Math.max(0, task.deadline - now);
+          const tot = task.deadline - task.createdAt;
+          const prog =
+            tot > 0 ? Math.min(1, (now - task.createdAt) / tot) : 1;
+          const urg = rem < 60_000 * 5;
+          const { h, m, s } = decompose(rem);
+          const cls = rem <= 0 ? "red" : urg ? "amber" : "cyan";
+
+          const clock = pip.document.getElementById("clock");
+          const bar = pip.document.getElementById("bar");
+          if (clock) {
+            clock.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+            clock.className = `timer ${cls}`;
+          }
+          if (bar) {
+            bar.style.width = `${prog * 100}%`;
+            bar.className = `bar-fill ${cls}`;
+          }
+        };
+
+        update();
+        intervalRef.current = window.setInterval(update, 200);
+
+        // When the PiP window is closed by the user, clean up and notify parent
+        pip.addEventListener("pagehide", () => {
+          cleanup();
+          onClose();
+        });
+      } catch (err) {
+        console.error("[mini-pip]", err);
+        // PiP failed — stay mounted so the in-page fallback shows
+      }
+    })();
+  }, []);
+
+  // ── If PiP is active, render nothing in the page ──
+  // (The timer lives in the external PiP window.)
+  if (hasPip) return null;
+
+  // ── Fallback: draggable in-page floating widget ──
+  return <InPageMiniFloat task={task} onDone={onDone} onClose={onClose} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   InPageMiniFloat — the original draggable in-page fallback
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function InPageMiniFloat({
   task,
   onDone,
   onClose,
