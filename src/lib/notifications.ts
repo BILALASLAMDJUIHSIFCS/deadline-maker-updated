@@ -56,10 +56,11 @@ export function fireNow(task: Task): void {
   if (swReg) {
     swReg.showNotification(`⌁ ${task.title}`, {
       body,
+      icon: "/app-icon.png",
       tag: `deadline-${task.id}`,
       requireInteraction: true,
     });
   } else {
-    new Notification(`⌁ ${task.title}`, { body, tag: `deadline-${task.id}` });
+    new Notification(`⌁ ${task.title}`, { body, icon: "/app-icon.png", tag: `deadline-${task.id}` });
   }
 }

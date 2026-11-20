@@ -444,7 +444,10 @@ export function MiniFloat({
         `;
 
         pip.document.body.innerHTML = `
-          <div class="title">${task.title.replace(/</g, "&lt;")}</div>
+          <div style="display:flex;align-items:center;gap:6px;max-width:90%;margin-bottom:2px;">
+            <img src="/app-icon.png" style="width:16px;height:16px;border-radius:4px;object-fit:contain;" />
+            <div class="title">${task.title.replace(/</g, "&lt;")}</div>
+          </div>
           <div id="clock" class="timer cyan">00:00:00</div>
           <div class="bar-track"><div id="bar" class="bar-fill cyan" style="width:0%"></div></div>
           <div class="actions">
@@ -580,9 +583,12 @@ function InPageMiniFloat({
       }}
     >
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-2">
-        <span className="max-w-[200px] truncate font-mono text-[10px] text-muted">
-          {task.title}
-        </span>
+        <div className="flex items-center gap-2 max-w-[220px] min-w-0">
+          <img src="/app-icon.png" alt="icon" className="h-4 w-4 rounded-md object-contain shrink-0" />
+          <span className="truncate font-mono text-[10px] text-muted">
+            {task.title}
+          </span>
+        </div>
         <button
           onClick={onClose}
           className="text-[14px] leading-none text-faint transition-colors hover:text-orange"

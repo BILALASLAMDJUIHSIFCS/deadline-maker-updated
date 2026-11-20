@@ -10,9 +10,10 @@ function fireNotification(task) {
     : "This deadline has passed.";
   return self.registration.showNotification(`⌁ ${task.title}`, {
     body,
+    icon: "/app-icon.png",
+    badge: "/app-icon.png",
     tag: `deadline-${task.id}`,
     requireInteraction: true,
-    badge: undefined,
     data: { id: task.id },
     silent: false,
   });

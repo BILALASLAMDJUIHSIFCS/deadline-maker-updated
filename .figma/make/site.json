@@ -2,5 +2,8 @@
   "title": "Deadline Maker",
   "description": "Set the time, name the stakes, beat the clock.",
   "language": "en",
-  "robots": { "index": false }
+  "robots": { "index": false },
+  "icons": {
+    "icon": "/favicon.png"
+  }
 }
