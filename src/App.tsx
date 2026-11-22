@@ -8,9 +8,27 @@ import CycleMeter from "./components/CycleMeter";
 import ThemePicker from "./components/ThemePicker";
 import { loadThemePref, persistTheme, syncTheme, type ThemeId } from "./lib/theme";
 import {
+  ArrowRight,
+  Bell,
+  BellOff,
+  Check,
+  ChevronDown,
+  Cloud,
+  CloudAlert,
+  CloudOff,
+  Lock,
+  Maximize2,
+  PictureInPicture2,
+  RefreshCw,
+} from "lucide-react";
+import ProgressPanel from "./components/ProgressPanel";
+import { useTodos } from "./lib/useTodos";
+import type { Todo } from "./lib/todos";
+import { parseTodoText, withBudget } from "./lib/todoTime";
+import type { SendRef } from "./components/TodoList";
+import {
   dayKey,
   fetchRemoteTasks,
-  lastSevenDays,
   loadTasks,
   mergeTasks,
   persistTasks,
@@ -29,7 +47,6 @@ import {
   scheduleNotification,
 } from "./lib/notifications";
 import { saveDailySnapshot, snapshotDay } from "./lib/history";
-import MonthlyProgress from "./components/MonthlyProgress";
 import FullscreenTimer, { MiniFloat } from "./components/FullscreenTimer";
 
 // Quick presets, in minutes — mirrors the fast-select menu.
@@ -96,6 +113,10 @@ export default function App() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [miniId, setMiniId] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  const todos = useTodos();
+  // The later-list item last sent to the composer; the next deadline locked
+  // with that same title gets linked to it so its time budget follows the timer.
+  const [pendingLink, setPendingLink] = useState<(SendRef & { title: string }) | null>(null);
   // Tasks whose final-10s warning has already sounded, so it fires only once.
   const warned = useRef<Set<string>>(new Set());
 
@@ -237,6 +258,64 @@ export default function App() {
     saveDailySnapshot(snapshot);
   }, [tasks]);
 
+  const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  // When a deadline linked to a later-list item ends (done early or missed),
+  // subtract the time actually spent from that item's budget: a 1h item that
+  // ran for 40m is left with 20m. Fully used budgets drop their time suffix.
+  const { items: todoItems, commit: commitTodos } = todos;
+  useEffect(() => {
+    const settle = (text: string, taskId: string | null | undefined) => {
+      const task = taskId ? tasksById.get(taskId) : undefined;
+      if (!task || task.status === "active") return null;
+      const { title, minutes } = parseTodoText(text);
+      if (minutes == null) return { text };
+      const end = Math.min(task.resolvedAt ?? task.deadline, task.deadline);
+      const used = (end - task.createdAt) / 60_000;
+      return { text: withBudget(title, Math.round(minutes - used)) };
+    };
+    const needsSettle = todoItems.some(
+      (t) => settle(t.text, t.taskId) || t.subs.some((s) => settle(s.text, s.taskId))
+    );
+    if (!needsSettle) return;
+    commitTodos((prev) =>
+      prev.map((t): Todo => {
+        let next = t;
+        const own = settle(t.text, t.taskId);
+        if (own) next = { ...next, text: own.text, taskId: null };
+        if (t.subs.some((s) => settle(s.text, s.taskId))) {
+          next = {
+            ...next,
+            subs: t.subs.map((s) => {
+              const r = settle(s.text, s.taskId);
+              return r ? { ...s, text: r.text, taskId: null } : s;
+            }),
+          };
+        }
+        return next;
+      })
+    );
+  }, [tasksById, todoItems, commitTodos]);
+
+  function sendToComposer(ref: SendRef) {
+    const { title: name, minutes: budget } = parseTodoText(ref.text);
+    setTitle(name);
+    if (budget) applyQuick(budget);
+    setPendingLink(budget ? { ...ref, title: name } : null);
+    titleRef.current?.focus();
+    titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function linkTodo(ref: SendRef, taskId: string) {
+    commitTodos((prev) =>
+      prev.map((t) => {
+        if (t.id !== ref.todoId) return t;
+        if (!ref.subId) return { ...t, taskId };
+        return { ...t, subs: t.subs.map((s) => (s.id === ref.subId ? { ...s, taskId } : s)) };
+      })
+    );
+  }
+
   const totalMinutes = hours * 60 + minutes;
   const fireClock = fmtClock(now + totalMinutes * 60_000);
 
@@ -278,6 +357,8 @@ export default function App() {
     setTasks(next);
     persistTasks(next);
     scheduleNotification(task);
+    if (pendingLink && pendingLink.title === task.title) linkTodo(pendingLink, task.id);
+    setPendingLink(null);
     setTitle("");
     setConsequence("");
     titleRef.current?.focus();
@@ -309,25 +390,6 @@ export default function App() {
         .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0)),
     [tasks]
   );
-
-  const week = useMemo(() => {
-    const days = lastSevenDays();
-    return days.map((d) => {
-      const of = tasks.filter((t) => t.day === d);
-      return {
-        day: d,
-        done: of.filter((t) => t.status === "done").length,
-        missed: of.filter((t) => t.status === "missed").length,
-        active: of.filter((t) => t.status === "active").length,
-        total: of.length,
-      };
-    });
-  }, [tasks]);
-
-  const weekDone = week.reduce((a, d) => a + d.done, 0);
-  const weekMissed = week.reduce((a, d) => a + d.missed, 0);
-  const weekTotal = week.reduce((a, d) => a + d.total, 0);
-  const rate = weekDone + weekMissed ? Math.round((weekDone / (weekDone + weekMissed)) * 100) : 0;
 
   return (
     <div className="bg-app min-h-full w-full">
@@ -443,7 +505,11 @@ export default function App() {
                   type="submit"
                   className="group relative overflow-hidden rounded-lg bg-orange px-6 py-3.5 font-mono text-sm font-bold uppercase tracking-wider text-[color:var(--color-orange-ink)] transition-transform active:scale-[0.98]"
                 >
-                  <span className="relative z-10">Lock in deadline →</span>
+                  <span className="relative z-10 flex items-center gap-2">
+                    <Lock aria-hidden className="h-4 w-4" strokeWidth={2.5} />
+                    Lock in deadline
+                    <ArrowRight aria-hidden className="h-4 w-4 transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
+                  </span>
                   <span className="absolute inset-0 -translate-x-full bg-white/25 transition-transform duration-300 group-hover:translate-x-0" />
                 </button>
                 <AnimatePresence>
@@ -515,9 +581,9 @@ export default function App() {
                     <motion.span
                       animate={{ rotate: showAllResolved ? 180 : 0 }}
                       transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                      className="text-xs leading-none"
+                      className="grid place-items-center"
                     >
-                      ▾
+                      <ChevronDown aria-hidden className="h-3.5 w-3.5" />
                     </motion.span>
                   </button>
                 )}
@@ -531,78 +597,14 @@ export default function App() {
           <CycleMeter tasks={tasks} now={now} />
 
           <TodoList
-            onUse={(text) => {
-              setTitle(text);
-              titleRef.current?.focus();
-              titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }}
+            items={todos.items}
+            commit={todos.commit}
+            tasksById={tasksById}
+            now={now}
+            onUse={sendToComposer}
           />
 
-          <div className="surface relative isolate mt-6 overflow-hidden rounded-2xl border border-line bg-panel">
-            <CornerGlow />
-            <div className="flex items-center gap-2 border-b border-line-soft px-5 py-3">
-              <span className="tracked text-[10px] text-orange">[ 7-day record ]</span>
-            </div>
-
-            <div className="p-6">
-              <div className="flex items-end justify-between">
-                <div className="flex items-baseline gap-1">
-                  <span className="display text-6xl leading-none text-fg tabular-nums">{rate}</span>
-                  <span className="display text-2xl text-muted">%</span>
-                </div>
-                <span className="tracked mb-1 text-[10px] text-faint">completion</span>
-              </div>
-
-              <div className="mt-6 grid grid-cols-3 gap-2">
-                <Stat n={weekDone} label="done" tone="lime" />
-                <Stat n={weekMissed} label="missed" tone="orange" />
-                <Stat n={weekTotal} label="total" tone="fg" />
-              </div>
-
-              {/* Day bars — stacked array */}
-              <div className="mt-8 flex items-end justify-between gap-2">
-                {week.map((d, i) => {
-                  const max = Math.max(1, ...week.map((x) => x.total));
-                  const h = (d.total / max) * 104;
-                  const label = new Date(d.day + "T00:00:00").toLocaleDateString([], { weekday: "narrow" });
-                  const isToday = i === week.length - 1;
-                  return (
-                    <div key={d.day} className="flex flex-1 flex-col items-center gap-2">
-                      <div className="flex h-[104px] w-full items-end">
-                        <motion.div
-                          className="flex w-full flex-col-reverse overflow-hidden rounded-[3px]"
-                          initial={{ height: 0 }}
-                          animate={{ height: d.total ? Math.max(6, h) : 3 }}
-                          transition={{ delay: i * 0.045, type: "spring", stiffness: 260, damping: 26 }}
-                          style={{ backgroundColor: d.total ? undefined : "var(--color-bar-off)" }}
-                        >
-                          {d.done > 0 && <div style={{ flexGrow: d.done }} className="w-full bg-lime" />}
-                          {d.missed > 0 && <div style={{ flexGrow: d.missed }} className="w-full bg-orange" />}
-                          {d.active > 0 && <div style={{ flexGrow: d.active }} className="w-full bg-cyan" />}
-                        </motion.div>
-                      </div>
-                      <span className={`tracked text-[9px] ${isToday ? "text-orange" : "text-faint"}`}>
-                        {label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 tracked text-[9px] text-muted">
-                <Legend color="bg-lime" text="done" />
-                <Legend color="bg-orange" text="missed" />
-                <Legend color="bg-cyan" text="live" />
-              </div>
-
-              <p className="mt-6 border-t border-line-soft pt-4 font-mono text-[10px] leading-relaxed text-faint">
-                Rolling 7 days. On the 8th day the oldest day drops automatically.
-                Stored on this device only.
-              </p>
-            </div>
-          </div>
-
-          <MonthlyProgress />
+          <ProgressPanel tasks={tasks} />
         </aside>
       </div>
 
@@ -639,11 +641,11 @@ export default function App() {
   );
 }
 
-const SYNC_LABEL: Record<SyncStatus, { text: string; tone: string; dot: string }> = {
-  local: { text: "local only", tone: "text-muted", dot: "bg-faint" },
-  syncing: { text: "syncing", tone: "text-amber", dot: "bg-amber ember-pulse" },
-  synced: { text: "cloud synced", tone: "text-cyan", dot: "bg-cyan" },
-  error: { text: "sync error", tone: "text-orange", dot: "bg-orange" },
+const SYNC_LABEL: Record<SyncStatus, { text: string; tone: string; Icon: typeof Cloud; spin?: boolean }> = {
+  local: { text: "local only", tone: "text-muted", Icon: CloudOff },
+  syncing: { text: "syncing", tone: "text-amber", Icon: RefreshCw, spin: true },
+  synced: { text: "cloud synced", tone: "text-cyan", Icon: Cloud },
+  error: { text: "sync error", tone: "text-miss", Icon: CloudAlert },
 };
 
 function SyncBadge() {
@@ -661,7 +663,8 @@ function SyncBadge() {
       }
       className={`tracked flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[10px] ${s.tone}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} /> {s.text}
+      <s.Icon aria-hidden className={`h-3.5 w-3.5 ${s.spin ? "animate-spin [animation-duration:1.4s]" : ""}`} />
+      {s.text}
     </span>
   );
 }
@@ -690,14 +693,15 @@ function Header({
         <SyncBadge />
         {perm === "granted" ? (
           <span className="tracked flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[10px] text-lime">
-            <span className="ember-pulse h-1.5 w-1.5 rounded-full bg-lime" /> alerts on
+            <Bell aria-hidden className="h-3.5 w-3.5" /> alerts on
           </span>
         ) : (
           <button
             onClick={onEnable}
-            className="tracked rounded-md border border-line bg-panel px-3 py-2 text-[10px] text-muted transition-colors hover:border-amber hover:text-amber"
+            className="tracked flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[10px] text-muted transition-colors hover:border-amber hover:text-amber"
           >
-            {perm === "denied" ? "alerts blocked" : "[ enable alerts ]"}
+            <BellOff aria-hidden className="h-3.5 w-3.5" />
+            {perm === "denied" ? "alerts blocked" : "enable alerts"}
           </button>
         )}
       </div>
@@ -713,8 +717,8 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
   const urgent = task.status === "active" && remaining < 60_000 * 5;
   const missed = task.status === "missed";
   const done = task.status === "done";
-  const tone: "orange" | "amber" | "lime" | "cyan" = missed
-    ? "orange"
+  const tone: "miss" | "amber" | "lime" | "cyan" = missed
+    ? "miss"
     : done
     ? "lime"
     : urgent
@@ -729,7 +733,7 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
       exit={{ opacity: 0, scale: 0.97 }}
       transition={{ type: "spring", stiffness: 320, damping: 30 }}
       className={`surface overflow-hidden rounded-xl border bg-panel p-4 sm:p-5 ${
-        missed ? "border-orange/40" : done ? "border-lime/25" : urgent ? "border-amber/50" : "border-cyan/30"
+        missed ? "border-miss/40" : done ? "border-lime/25" : urgent ? "border-amber/50" : "border-cyan/30"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -737,7 +741,7 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
           <div className="truncate font-mono text-base font-semibold text-fg">{task.title}</div>
           {task.consequence && (
             <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-md border border-line bg-panel-2 px-2.5 py-1">
-              <span className={`tracked text-[8px] ${missed ? "text-orange" : "text-faint"}`}>
+              <span className={`tracked text-[8px] ${missed ? "text-miss" : "text-faint"}`}>
                 {missed ? "penalty" : "else"}
               </span>
               <span className="truncate font-mono text-xs text-muted">{task.consequence || "—"}</span>
@@ -748,7 +752,7 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
         {task.status !== "active" ? (
           <span
             className={`tracked rounded-md px-2.5 py-1 text-[9px] ${
-              missed ? "bg-orange text-[color:var(--color-orange-ink)]" : "bg-lime text-[color:var(--color-lime-ink)]"
+              missed ? "bg-miss text-[color:var(--color-miss-ink)]" : "bg-lime text-[color:var(--color-lime-ink)]"
             }`}
           >
             {missed ? "missed" : "done"}
@@ -759,26 +763,29 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
               <button
                 onClick={onMini}
                 title="Floating mini timer"
-                className="tracked rounded-md border border-line px-2 py-1.5 text-[9px] text-muted transition-colors hover:border-cyan hover:text-cyan"
+                aria-label="Open floating mini timer"
+                className="grid h-7 w-7 place-items-center rounded-md border border-line text-muted transition-colors hover:border-cyan hover:text-cyan"
               >
-                📌
+                <PictureInPicture2 aria-hidden className="h-3.5 w-3.5" />
               </button>
             )}
             {onExpand && (
               <button
                 onClick={onExpand}
                 title="Fullscreen timer"
-                className="tracked rounded-md border border-line px-2 py-1.5 text-[9px] text-muted transition-colors hover:border-cyan hover:text-cyan"
+                aria-label="Open fullscreen timer"
+                className="grid h-7 w-7 place-items-center rounded-md border border-line text-muted transition-colors hover:border-cyan hover:text-cyan"
               >
-                ⛶
+                <Maximize2 aria-hidden className="h-3.5 w-3.5" />
               </button>
             )}
             {onDone && (
               <button
                 onClick={onDone}
-                className="tracked rounded-md border border-line px-3 py-1.5 text-[9px] text-muted transition-colors hover:border-lime hover:text-lime"
+                className="tracked flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-[9px] text-muted transition-colors hover:border-lime hover:text-lime"
               >
-                mark done
+                <Check aria-hidden className="h-3.5 w-3.5" strokeWidth={2.5} />
+                done
               </button>
             )}
           </div>
@@ -788,7 +795,7 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
       <div className="mt-4 flex items-end justify-between gap-4">
         <span
           className={`display text-3xl leading-none tabular-nums sm:text-4xl ${
-            missed ? "text-orange" : done ? "text-lime" : urgent ? "text-amber" : "text-cyan"
+            missed ? "text-miss" : done ? "text-lime" : urgent ? "text-amber" : "text-cyan"
           }`}
         >
           {task.status === "active" ? fmtRemaining(remaining) : fmtRemaining(0)}
@@ -810,24 +817,6 @@ function SectionLabel({ text, count, accent = "text-orange" }: { text: string; c
       <span className="tracked text-[11px] text-faint tabular-nums">{String(count).padStart(2, "0")}</span>
       <div className="h-px flex-1 bg-line-soft" />
     </div>
-  );
-}
-
-function Stat({ n, label, tone }: { n: number; label: string; tone: "lime" | "orange" | "fg" }) {
-  const color = tone === "lime" ? "text-lime" : tone === "orange" ? "text-orange" : "text-fg";
-  return (
-    <div className="rounded-lg border border-line-soft bg-panel-2 px-3 py-3">
-      <div className={`display text-3xl leading-none tabular-nums ${color}`}>{n}</div>
-      <div className="tracked mt-1.5 text-[8px] text-faint">{label}</div>
-    </div>
-  );
-}
-
-function Legend({ color, text }: { color: string; text: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={`h-2 w-2 rounded-[2px] ${color}`} /> {text}
-    </span>
   );
 }
 

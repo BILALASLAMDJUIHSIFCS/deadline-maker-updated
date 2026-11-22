@@ -37,7 +37,7 @@ type SnapshotRow = {
 const KEY = "deadline-maker:snapshots:v1";
 const TABLE = "daily_snapshots";
 
-function loadLocalSnapshots(): DailySnapshot[] {
+export function loadLocalSnapshots(): DailySnapshot[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];

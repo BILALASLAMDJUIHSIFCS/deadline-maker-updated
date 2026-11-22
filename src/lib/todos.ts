@@ -4,7 +4,14 @@
 import { supabase } from "./supabase";
 import { tracked } from "./sync";
 
-export type Sub = { id: string; text: string; done: boolean };
+export const TAGS = ["high", "medium", "low"] as const;
+export type Tag = (typeof TAGS)[number];
+export const isTag = (v: unknown): v is Tag =>
+  typeof v === "string" && (TAGS as readonly string[]).includes(v);
+
+// `taskId` links an item to the live deadline it was sent to, so the item's
+// time budget can be drawn down by the time actually spent on that deadline.
+export type Sub = { id: string; text: string; done: boolean; taskId?: string | null };
 export type Todo = {
   id: string;
   text: string;
@@ -12,6 +19,8 @@ export type Todo = {
   createdAt: number;
   subs: Sub[];
   updatedAt?: number;
+  tag?: Tag | null;
+  taskId?: string | null;
 };
 
 type TodoRow = {
@@ -21,7 +30,13 @@ type TodoRow = {
   created_at: number;
   subs: Sub[];
   updated_at: number;
+  tag?: string | null;
+  task_id?: string | null;
 };
+
+// Flipped off if the database hasn't run the later-list migration yet, so
+// sync keeps working (tag + link then stay on this device until it's applied).
+let extendedColumns = true;
 
 const KEY = "deadline-maker:todos:v1";
 const BACKUP_KEY = "deadline-maker:todos:v1:backup"; // survives an accidental main-key wipe
@@ -83,8 +98,9 @@ const version = (t: Todo) => t.updatedAt ?? t.createdAt;
 
 export function mergeTodos(local: Todo[], remote: Todo[]): Todo[] {
   const deleted = new Set(readPendingDeletes());
+  const localById = new Map(local.map((t) => [t.id, t]));
   const byId = new Map<string, Todo>();
-  for (const t of [...local, ...remote]) {
+  for (const t of [...local, ...remote.map((r) => keepLocalMeta(r, localById.get(r.id)))]) {
     if (deleted.has(t.id)) continue;
     const cur = byId.get(t.id);
     if (!cur || version(t) > version(cur)) byId.set(t.id, t);
@@ -92,14 +108,21 @@ export function mergeTodos(local: Todo[], remote: Todo[]): Todo[] {
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
 }
 
-const toRow = (t: Todo): TodoRow => ({
-  id: t.id,
-  text: t.text,
-  done: t.done,
-  created_at: t.createdAt,
-  subs: t.subs,
-  updated_at: version(t),
-});
+const toRow = (t: Todo): TodoRow => {
+  const row: TodoRow = {
+    id: t.id,
+    text: t.text,
+    done: t.done,
+    created_at: t.createdAt,
+    subs: t.subs,
+    updated_at: version(t),
+  };
+  if (extendedColumns) {
+    row.tag = t.tag ?? null;
+    row.task_id = t.taskId ?? null;
+  }
+  return row;
+};
 
 const fromRow = (r: TodoRow): Todo => ({
   id: r.id,
@@ -108,7 +131,23 @@ const fromRow = (r: TodoRow): Todo => ({
   createdAt: Number(r.created_at),
   subs: Array.isArray(r.subs) ? r.subs : [],
   updatedAt: Number(r.updated_at),
+  ...("tag" in r ? { tag: isTag(r.tag) ? r.tag : null } : {}),
+  ...("task_id" in r ? { taskId: r.task_id ?? null } : {}),
 });
+
+// Remote rows from a database without the new columns carry no tag/link, so
+// keep whatever this device already knows instead of wiping it.
+function keepLocalMeta(remote: Todo, local: Todo | undefined): Todo {
+  if (!local) return remote;
+  return {
+    ...remote,
+    tag: "tag" in remote ? remote.tag : local.tag,
+    taskId: "taskId" in remote ? remote.taskId : local.taskId,
+  };
+}
+
+const isMissingColumn = (error: { code?: string; message?: string }) =>
+  error.code === "PGRST204" || error.code === "42703" || /column/i.test(error.message ?? "");
 
 export async function fetchRemoteTodos(): Promise<Todo[] | null> {
   const client = supabase;
@@ -129,7 +168,14 @@ export async function pushTodos(changed: Todo[]): Promise<void> {
   if (!client) return;
   await tracked("save todos", async () => {
     if (changed.length) {
-      const { error } = await client.from(TABLE).upsert(changed.map(toRow), { onConflict: "id" });
+      let { error } = await client.from(TABLE).upsert(changed.map(toRow), { onConflict: "id" });
+      if (error && extendedColumns && isMissingColumn(error)) {
+        console.warn(
+          "[supabase] todos.tag / todos.task_id missing — run supabase/migrations/20261122000000_later_list_upgrades.sql. Tags stay local until then."
+        );
+        extendedColumns = false;
+        ({ error } = await client.from(TABLE).upsert(changed.map(toRow), { onConflict: "id" }));
+      }
       if (error) throw error;
     }
     const toDelete = readPendingDeletes();

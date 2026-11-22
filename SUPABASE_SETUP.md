@@ -12,6 +12,12 @@ Open your Supabase project → **SQL Editor** → paste and run
 Then run `supabase/migrations/20261116000000_app_settings_theme.sql` too — it
 creates the `app_settings` table that stores your selected theme.
 
+Then run `supabase/migrations/20261118000000_daily_snapshots.sql` and
+`supabase/migrations/20261122000000_later_list_upgrades.sql`. The last one adds
+later-list priority tags (`todos.tag`), deadline links (`todos.task_id`) and
+allows the 10 new themes. Until it runs, the app still syncs, but tags and the
+new themes are kept only on the device where you set them.
+
 (With the Supabase CLI instead: `supabase link` then `supabase db push`.)
 
 ## 2. Add the keys

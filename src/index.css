@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=VT323&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&family=Mona+Sans:wght@400;500;600;700;800&family=Figtree:wght@400;500;600;700;800&family=Bebas+Neue&family=Nunito:wght@400;600;700;800&family=Rubik:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 /* Classic (default) — the original black + ember orange look. Every other
@@ -29,6 +30,15 @@
   --color-lime-ink: #0d1a02;
   --color-cyan: #35d6c4;
   --color-bar-off: rgba(255, 255, 255, 0.09);
+
+  /* "missed" state — follows the accent unless a theme splits them */
+  --color-miss: var(--color-orange);
+  --color-miss-ink: var(--color-orange-ink);
+
+  /* later-list priority tags */
+  --color-tag-high: #ff5d5d;
+  --color-tag-med: #f5b324;
+  --color-tag-low: #5aa9ff;
 
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
@@ -91,6 +101,9 @@
 /* ── Neo Brutal ─ sunshine yellow, chunky ink borders, hard offset shadows ── */
 :root[data-theme='brutal'] {
   color-scheme: light;
+  --color-tag-high: #d92d3a;
+  --color-tag-med: #b26a00;
+  --color-tag-low: #2463d1;
   --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -128,6 +141,9 @@
 /* ── Sage Daylight ─ airy, soft-light workspace with calm greens ── */
 :root[data-theme='sage'] {
   color-scheme: light;
+  --color-tag-high: #d92d3a;
+  --color-tag-med: #b26a00;
+  --color-tag-low: #2463d1;
   --font-display: 'Manrope', ui-sans-serif, system-ui, sans-serif;
   --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -195,6 +211,395 @@
   --surface-shadow: 0 0 0 1px rgba(255, 176, 0, 0.05), 0 0 28px -6px rgba(255, 176, 0, 0.18);
   --display-weight: 400;
   --display-shadow: 0 0 10px rgba(255, 176, 0, 0.55);
+}
+
+/* ═══ Inspired by real sites ═══════════════════════════════════════════ */
+
+/* ── Linear ─ graphite canvas, indigo focus, tight Inter type ── */
+:root[data-theme='linear'] {
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #08090a;
+  --color-panel: rgba(255, 255, 255, 0.025);
+  --color-panel-2: rgba(255, 255, 255, 0.05);
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-soft: rgba(255, 255, 255, 0.05);
+  --color-fg: #f7f8f8;
+  --color-muted: #8a8f98;
+  --color-faint: #62666d;
+  --color-orange: #5e6ad2;
+  --color-orange-ink: #ffffff;
+  --color-orange-soft: rgba(94, 106, 210, 0.16);
+  --color-amber: #f2c94c;
+  --color-lime: #4cb782;
+  --color-lime-ink: #04130b;
+  --color-cyan: #26b5ce;
+  --color-bar-off: rgba(255, 255, 255, 0.07);
+  --color-miss: #eb5757;
+  --color-miss-ink: #ffffff;
+
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+
+  --app-bg: radial-gradient(70% 40% at 50% -5%, rgba(94, 106, 210, 0.16), transparent 70%), #08090a;
+  --top-glow: none;
+  --glow-strength: 0.25;
+  --surface-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  --display-weight: 600;
+}
+
+/* ── Vercel ─ pure black, Geist, strictly monochrome ── */
+:root[data-theme='vercel'] {
+  --font-display: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  --color-ink: #000000;
+  --color-panel: #0a0a0a;
+  --color-panel-2: #111111;
+  --color-line: #262626;
+  --color-line-soft: #1a1a1a;
+  --color-fg: #ededed;
+  --color-muted: #a1a1a1;
+  --color-faint: #707070;
+  --color-orange: #ededed;
+  --color-orange-ink: #0a0a0a;
+  --color-orange-soft: rgba(237, 237, 237, 0.1);
+  --color-amber: #ffb224;
+  --color-lime: #0cce6b;
+  --color-lime-ink: #000000;
+  --color-cyan: #52a8ff;
+  --color-bar-off: #1f1f1f;
+  --color-miss: #ff4d4f;
+  --color-miss-ink: #ffffff;
+
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 0.75rem;
+
+  --app-bg: #000000;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: none;
+  --display-weight: 600;
+}
+
+/* ── Stripe ─ crisp white, blurple accent, layered soft shadows ── */
+:root[data-theme='stripe'] {
+  color-scheme: light;
+  --color-tag-high: #df1b41;
+  --color-tag-med: #b35c00;
+  --color-tag-low: #0570de;
+  --font-display: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #f6f9fc;
+  --color-panel: #ffffff;
+  --color-panel-2: #f1f5fa;
+  --color-line: rgba(10, 37, 64, 0.12);
+  --color-line-soft: rgba(10, 37, 64, 0.07);
+  --color-fg: #0a2540;
+  --color-muted: #425466;
+  --color-faint: #6b7c93;
+  --color-orange: #635bff;
+  --color-orange-ink: #ffffff;
+  --color-orange-soft: rgba(99, 91, 255, 0.12);
+  --color-amber: #c86a00;
+  --color-lime: #0f9d6e;
+  --color-lime-ink: #ffffff;
+  --color-cyan: #0073e6;
+  --color-bar-off: rgba(10, 37, 64, 0.08);
+  --color-miss: #df1b41;
+  --color-miss-ink: #ffffff;
+
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+
+  --app-bg: #f6f9fc;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 0 13px 27px -5px rgba(50, 50, 93, 0.18), 0 8px 16px -8px rgba(0, 0, 0, 0.18);
+  --display-weight: 700;
+}
+
+/* ── GitHub Dimmed ─ slate dim mode, orange underline accent ── */
+:root[data-theme='github'] {
+  --font-display: 'Mona Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Mona Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #22272e;
+  --color-panel: #2d333b;
+  --color-panel-2: #373e47;
+  --color-line: #444c56;
+  --color-line-soft: #373e47;
+  --color-fg: #cdd9e5;
+  --color-muted: #909dab;
+  --color-faint: #768390;
+  --color-orange: #f69d50;
+  --color-orange-ink: #22272e;
+  --color-orange-soft: rgba(246, 157, 80, 0.14);
+  --color-amber: #daaa3f;
+  --color-lime: #57ab5a;
+  --color-lime-ink: #ffffff;
+  --color-cyan: #539bf5;
+  --color-bar-off: #373e47;
+  --color-miss: #e5534b;
+  --color-miss-ink: #ffffff;
+
+  --radius-md: 0.375rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.5rem;
+
+  --app-bg: #1c2128;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: none;
+  --display-weight: 700;
+}
+
+/* ── Spotify ─ deep black, signature green, bold rounded type ── */
+:root[data-theme='spotify'] {
+  --font-display: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #121212;
+  --color-panel: #181818;
+  --color-panel-2: #242424;
+  --color-line: #2e2e2e;
+  --color-line-soft: #222222;
+  --color-fg: #ffffff;
+  --color-muted: #b3b3b3;
+  --color-faint: #7a7a7a;
+  --color-orange: #1ed760;
+  --color-orange-ink: #000000;
+  --color-orange-soft: rgba(30, 215, 96, 0.14);
+  --color-amber: #ffa42b;
+  --color-lime: #1ed760;
+  --color-lime-ink: #000000;
+  --color-cyan: #4687d6;
+  --color-bar-off: #2a2a2a;
+  --color-miss: #f15e6c;
+  --color-miss-ink: #000000;
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  --app-bg: linear-gradient(180deg, #1f3a2a 0%, #121212 340px), #121212;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --display-weight: 800;
+}
+
+/* ── Notion ─ paper white, quiet ink, understated blue ── */
+:root[data-theme='notion'] {
+  color-scheme: light;
+  --color-tag-high: #d44c47;
+  --color-tag-med: #b26a1c;
+  --color-tag-low: #337ea9;
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #f7f7f5;
+  --color-panel: #ffffff;
+  --color-panel-2: #f7f7f5;
+  --color-line: rgba(55, 53, 47, 0.16);
+  --color-line-soft: rgba(55, 53, 47, 0.09);
+  --color-fg: #37352f;
+  --color-muted: #6f6e69;
+  --color-faint: #8f8e8a;
+  --color-orange: #2383e2;
+  --color-orange-ink: #ffffff;
+  --color-orange-soft: rgba(35, 131, 226, 0.12);
+  --color-amber: #b26a1c;
+  --color-lime: #448361;
+  --color-lime-ink: #ffffff;
+  --color-cyan: #337ea9;
+  --color-bar-off: rgba(55, 53, 47, 0.08);
+  --color-miss: #d44c47;
+  --color-miss-ink: #ffffff;
+
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+
+  --app-bg: #f7f7f5;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 0 0 0 1px rgba(15, 15, 15, 0.03), 0 3px 6px rgba(15, 15, 15, 0.06);
+  --display-weight: 700;
+}
+
+/* ── Netflix ─ cinema black, marquee red, condensed display ── */
+:root[data-theme='netflix'] {
+  --font-display: 'Bebas Neue', 'Inter', sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #000000;
+  --color-panel: #181818;
+  --color-panel-2: #232323;
+  --color-line: #333333;
+  --color-line-soft: #262626;
+  --color-fg: #ffffff;
+  --color-muted: #b3b3b3;
+  --color-faint: #808080;
+  --color-orange: #e50914;
+  --color-orange-ink: #ffffff;
+  --color-orange-soft: rgba(229, 9, 20, 0.16);
+  --color-amber: #f5c518;
+  --color-lime: #46d369;
+  --color-lime-ink: #000000;
+  --color-cyan: #54b9c5;
+  --color-bar-off: #2b2b2b;
+
+  --radius-md: 0.25rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.375rem;
+
+  --app-bg: radial-gradient(90% 50% at 50% 0%, rgba(229, 9, 20, 0.18), transparent 70%), #000000;
+  --top-glow: none;
+  --glow-strength: 0.3;
+  --surface-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.9);
+  --display-weight: 400;
+}
+
+:root[data-theme='netflix'] .display {
+  letter-spacing: 0.03em;
+}
+
+/* ── Discord ─ cozy charcoal layers, blurple pop ── */
+:root[data-theme='discord'] {
+  --font-display: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #313338;
+  --color-panel: #2b2d31;
+  --color-panel-2: #383a40;
+  --color-line: #3f4147;
+  --color-line-soft: #35373c;
+  --color-fg: #f2f3f5;
+  --color-muted: #b5bac1;
+  --color-faint: #8e9297;
+  --color-orange: #5865f2;
+  --color-orange-ink: #ffffff;
+  --color-orange-soft: rgba(88, 101, 242, 0.18);
+  --color-amber: #f0b232;
+  --color-lime: #23a55a;
+  --color-lime-ink: #ffffff;
+  --color-cyan: #00a8fc;
+  --color-bar-off: #404249;
+  --color-miss: #f23f43;
+  --color-miss-ink: #ffffff;
+
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.5rem;
+
+  --app-bg: #313338;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 0 1px 0 rgba(4, 4, 5, 0.2), 0 2px 10px rgba(0, 0, 0, 0.15);
+  --display-weight: 800;
+}
+
+/* ── Apple ─ light gray canvas, white cards, calm blue ── */
+:root[data-theme='apple'] {
+  color-scheme: light;
+  --color-tag-high: #d70015;
+  --color-tag-med: #b25000;
+  --color-tag-low: #0066cc;
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #f5f5f7;
+  --color-panel: #ffffff;
+  --color-panel-2: #f5f5f7;
+  --color-line: rgba(0, 0, 0, 0.1);
+  --color-line-soft: rgba(0, 0, 0, 0.06);
+  --color-fg: #1d1d1f;
+  --color-muted: #6e6e73;
+  --color-faint: #86868b;
+  --color-orange: #0071e3;
+  --color-orange-ink: #ffffff;
+  --color-orange-soft: rgba(0, 113, 227, 0.1);
+  --color-amber: #b25000;
+  --color-lime: #248a3d;
+  --color-lime-ink: #ffffff;
+  --color-cyan: #0077ed;
+  --color-bar-off: rgba(0, 0, 0, 0.07);
+  --color-miss: #d70015;
+  --color-miss-ink: #ffffff;
+
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.375rem;
+
+  --app-bg: #f5f5f7;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --display-weight: 600;
+}
+
+/* ── Nord ─ arctic polar night with frost accents ── */
+:root[data-theme='nord'] {
+  --font-display: 'Rubik', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Rubik', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #2e3440;
+  --color-panel: #3b4252;
+  --color-panel-2: #434c5e;
+  --color-line: #4c566a;
+  --color-line-soft: #434c5e;
+  --color-fg: #eceff4;
+  --color-muted: #c0c8d6;
+  --color-faint: #8f9bb3;
+  --color-orange: #88c0d0;
+  --color-orange-ink: #2e3440;
+  --color-orange-soft: rgba(136, 192, 208, 0.16);
+  --color-amber: #ebcb8b;
+  --color-lime: #a3be8c;
+  --color-lime-ink: #2e3440;
+  --color-cyan: #81a1c1;
+  --color-bar-off: #434c5e;
+  --color-miss: #bf616a;
+  --color-miss-ink: #eceff4;
+  --color-tag-high: #d08770;
+  --color-tag-med: #ebcb8b;
+  --color-tag-low: #81a1c1;
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  --app-bg: #2e3440;
+  --top-glow: none;
+  --glow-strength: 0;
+  --surface-shadow: 0 6px 20px -10px rgba(0, 0, 0, 0.4);
+  --display-weight: 600;
 }
 
 html,

@@ -105,7 +105,7 @@ export default function CycleMeter({ tasks, now }: Props) {
             label="missed"
             value={fmtHM(stats.missedMin)}
             sub={`${fmtCycles(stats.missedMin)} cyc · ${stats.missedCount} todo`}
-            tone="text-orange"
+            tone="text-miss"
           />
           <Figure
             label="left"

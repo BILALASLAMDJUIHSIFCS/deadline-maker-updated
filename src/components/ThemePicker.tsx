@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { THEMES, type ThemeId } from "../lib/theme";
+import { Check, ChevronDown, Palette } from "lucide-react";
+import { THEMES, type ThemeId, type ThemeMeta } from "../lib/theme";
+
+const GROUPS: { id: ThemeMeta["group"]; label: string }[] = [
+  { id: "original", label: "originals" },
+  { id: "inspired", label: "inspired by real sites" },
+];
 
 type Props = { value: ThemeId; onChange: (id: ThemeId) => void };
 
@@ -35,8 +41,11 @@ export default function ThemePicker({ value, onChange }: Props) {
         onClick={() => setOpen((v) => !v)}
         className="surface tracked flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[10px] text-muted transition-colors hover:border-orange hover:text-fg"
       >
+        <Palette aria-hidden className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{current.name}</span>
+        <span className="sm:hidden">theme</span>
         <Swatch colors={current.swatch} small />
-        theme
+        <ChevronDown aria-hidden className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       <AnimatePresence>
@@ -49,38 +58,41 @@ export default function ThemePicker({ value, onChange }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            className="surface absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-xl border border-line p-2"
+            className="surface absolute right-0 z-50 mt-2 max-h-[70vh] w-[27rem] overflow-y-auto rounded-xl border border-line p-2 max-sm:fixed max-sm:inset-x-4 max-sm:top-24 max-sm:mt-0 max-sm:w-auto"
             style={{ backgroundColor: "var(--color-ink)" }}
           >
-            <p className="tracked px-2 pb-2 pt-1 text-[9px] text-faint">[ select theme ]</p>
-            {THEMES.map((t) => {
-              const on = t.id === value;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => {
-                    onChange(t.id);
-                    setOpen(false);
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
-                    on ? "bg-panel-2" : "hover:bg-panel"
-                  }`}
-                >
-                  <Swatch colors={t.swatch} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-fg">{t.name}</span>
-                    <span className="block truncate text-xs text-muted">{t.tagline}</span>
-                  </span>
-                  <span
-                    aria-hidden
-                    className={`h-2 w-2 shrink-0 rounded-full ${on ? "bg-orange" : "border border-line"}`}
-                  />
-                </button>
-              );
-            })}
+            {GROUPS.map((g) => (
+              <div key={g.id} className="pb-1">
+                <p className="tracked px-2 pb-1.5 pt-2 text-[9px] text-faint">[ {g.label} ]</p>
+                <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
+                  {THEMES.filter((t) => t.group === g.id).map((t) => {
+                    const on = t.id === value;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => {
+                          onChange(t.id);
+                          setOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors ${
+                          on ? "bg-panel-2" : "hover:bg-panel"
+                        }`}
+                      >
+                        <Swatch colors={t.swatch} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] font-semibold text-fg">{t.name}</span>
+                          <span className="block truncate text-[11px] text-muted">{t.tagline}</span>
+                        </span>
+                        {on && <Check aria-hidden className="h-3.5 w-3.5 shrink-0 text-orange" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
@@ -93,7 +105,7 @@ function Swatch({ colors, small }: { colors: [string, string, string]; small?: b
   return (
     <span
       aria-hidden
-      className={`relative shrink-0 overflow-hidden rounded-md border border-line ${small ? "h-3.5 w-3.5" : "h-9 w-9"}`}
+      className={`relative shrink-0 overflow-hidden rounded-md border border-line ${small ? "h-3.5 w-3.5" : "h-8 w-8"}`}
       style={{ backgroundColor: bg }}
     >
       <span

@@ -1,84 +1,67 @@
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { ChevronDown, Flag, ListTodo, Plus } from "lucide-react";
 import CornerGlow from "./CornerGlow";
-import {
-  fetchRemoteTodos,
-  loadLocalTodos,
-  mergeTodos,
-  persistTodos,
-  pushTodos,
-  saveLocalTodos,
-  type Todo,
-} from "../lib/todos";
+import TodoItem, { isDone } from "./TodoItem";
+import { TAG_META } from "./TagPicker";
+import { TAGS, type Sub, type Tag, type Todo } from "../lib/todos";
+import type { Task } from "../lib/storage";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+const VISIBLE = 5;
 
-// Whether a task counts as complete: driven by its sub-tasks when it has any.
-function isDone(t: Todo): boolean {
-  return t.subs.length ? t.subs.every((s) => s.done) : t.done;
-}
+type Filter = "all" | Tag;
+
+export type SendRef = { todoId: string; subId?: string; text: string };
+
+type Props = {
+  items: Todo[];
+  commit: (change: (prev: Todo[]) => Todo[]) => void;
+  tasksById: Map<string, Task>;
+  now: number;
+  onUse?: (ref: SendRef) => void;
+};
 
 // A lightweight scratch list — tasks (and sub-tasks) parked here instead of Notion.
-export default function TodoList({ onUse }: { onUse?: (text: string) => void }) {
-  const [items, setItems] = useState<Todo[]>([]);
+export default function TodoList({ items, commit, tasksById, now, onUse }: Props) {
   const [draft, setDraft] = useState("");
-  const [openIds, setOpenIds] = useState<Set<string>>(new Set()); // UI-only: collapsed by default
+  const [draftTag, setDraftTag] = useState<Tag | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [showAll, setShowAll] = useState(false);
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const [subDrafts, setSubDrafts] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Show the local copy instantly, then reconcile with Supabase (if configured)
-  // and upload anything that only existed in this browser.
-  useEffect(() => {
-    let cancelled = false;
-    setItems(loadLocalTodos());
-    void fetchRemoteTodos().then((remote) => {
-      if (cancelled || !remote) return;
-      setItems((cur) => {
-        const merged = mergeTodos(cur, remote);
-        saveLocalTodos(merged);
-        void pushTodos(merged);
-        return merged;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  function persist(next: Todo[]) {
-    setItems(persistTodos(items, next));
-  }
+  const update = (id: string, fn: (t: Todo) => Todo) =>
+    commit((prev) => prev.map((t) => (t.id === id ? fn(t) : t)));
 
   function add(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    persist([{ id: uid(), text, done: false, createdAt: Date.now(), subs: [] }, ...items]);
+    commit((prev) => [
+      { id: uid(), text, done: false, createdAt: Date.now(), subs: [], tag: draftTag, taskId: null },
+      ...prev,
+    ]);
     setDraft("");
     inputRef.current?.focus();
   }
 
   function toggle(id: string) {
-    persist(
-      items.map((t) => {
-        if (t.id !== id) return t;
-        if (t.subs.length) {
-          const next = !t.subs.every((s) => s.done);
-          return { ...t, subs: t.subs.map((s) => ({ ...s, done: next })) };
-        }
-        return { ...t, done: !t.done };
-      })
-    );
-  }
-
-  function remove(id: string) {
-    persist(items.filter((t) => t.id !== id));
+    update(id, (t) => {
+      if (t.subs.length) {
+        const next = !t.subs.every((s) => s.done);
+        return { ...t, subs: t.subs.map((s) => ({ ...s, done: next })) };
+      }
+      return { ...t, done: !t.done };
+    });
   }
 
   function toggleOpen(id: string) {
     setOpenIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
@@ -87,216 +70,198 @@ export default function TodoList({ onUse }: { onUse?: (text: string) => void }) 
     e.preventDefault();
     const text = (subDrafts[id] ?? "").trim();
     if (!text) return;
-    persist(
-      items.map((t) =>
-        t.id === id ? { ...t, subs: [...t.subs, { id: uid(), text, done: false }] } : t
-      )
-    );
+    update(id, (t) => ({ ...t, subs: [...t.subs, { id: uid(), text, done: false }] }));
     setSubDrafts((d) => ({ ...d, [id]: "" }));
   }
 
-  function toggleSub(pid: string, sid: string) {
-    persist(
-      items.map((t) =>
-        t.id === pid
-          ? { ...t, subs: t.subs.map((s) => (s.id === sid ? { ...s, done: !s.done } : s)) }
-          : t
-      )
-    );
-  }
+  const editSub = (pid: string, sid: string, fn: (s: Sub) => Sub | null) =>
+    update(pid, (t) => ({
+      ...t,
+      subs: t.subs.flatMap((s) => {
+        if (s.id !== sid) return [s];
+        const next = fn(s);
+        return next ? [next] : [];
+      }),
+    }));
 
-  function removeSub(pid: string, sid: string) {
-    persist(
-      items.map((t) => (t.id === pid ? { ...t, subs: t.subs.filter((s) => s.id !== sid) } : t))
-    );
-  }
+  const counts = useMemo(() => {
+    const open = items.filter((t) => !isDone(t));
+    return {
+      open: open.length,
+      high: items.filter((t) => t.tag === "high").length,
+      medium: items.filter((t) => t.tag === "medium").length,
+      low: items.filter((t) => t.tag === "low").length,
+    };
+  }, [items]);
 
-  const remaining = items.filter((t) => !isDone(t)).length;
+  const filtered = filter === "all" ? items : items.filter((t) => t.tag === filter);
+  const visible = showAll ? filtered : filtered.slice(0, VISIBLE);
+  const hidden = filtered.length - VISIBLE;
 
   return (
-    <div className="surface relative isolate mt-6 overflow-hidden rounded-2xl border border-line bg-panel">
+    <section
+      aria-labelledby="later-list-title"
+      className="surface relative isolate mt-6 rounded-2xl border border-line bg-panel"
+    >
       <CornerGlow />
       <div className="flex items-center gap-2 border-b border-line-soft px-5 py-3">
-        <span className="tracked text-[10px] text-orange">[ later list ]</span>
-        <span className="ml-auto tracked text-[10px] text-faint tabular-nums">{remaining} open</span>
+        <ListTodo aria-hidden className="h-3.5 w-3.5 text-orange" />
+        <h2 id="later-list-title" className="tracked text-[10px] text-orange">
+          [ later list ]
+        </h2>
+        <span className="ml-auto tracked text-[10px] text-faint tabular-nums">{counts.open} open</span>
       </div>
 
       <div className="p-5">
-        <form onSubmit={add} className="flex items-center gap-2">
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Park a task for later…"
-            className="min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2.5 font-mono text-sm text-fg outline-none transition-colors placeholder:text-faint focus:border-orange"
-          />
-          <button
-            type="submit"
-            className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg bg-orange text-xl leading-none text-[color:var(--color-orange-ink)] transition-transform active:scale-95"
-            aria-label="Add task"
-          >
-            +
-          </button>
-        </form>
+        <form onSubmit={add} className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Park a task… → 25m"
+              aria-label="New later-list task. Add an arrow and a time, like → 1h 30m, to set its budget."
+              className="min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2.5 font-mono text-sm text-fg outline-none transition-colors placeholder:text-faint focus:border-orange"
+            />
+            <button
+              type="submit"
+              className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg bg-orange text-[color:var(--color-orange-ink)] transition-transform active:scale-95"
+              aria-label="Add task"
+            >
+              <Plus aria-hidden className="h-5 w-5" strokeWidth={2.5} />
+            </button>
+          </div>
 
-        <ul className="mt-4 space-y-1.5">
-          <AnimatePresence initial={false}>
-            {items.map((t) => {
-              const open = openIds.has(t.id);
-              const done = isDone(t);
-              const doneCount = t.subs.filter((s) => s.done).length;
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Priority for new task">
+            <span className="tracked mr-1 text-[9px] text-faint">tag</span>
+            {TAGS.map((tag) => {
+              const m = TAG_META[tag];
+              const on = draftTag === tag;
               return (
-                <motion.li
-                  key={t.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
-                  transition={{ type: "spring", stiffness: 340, damping: 30 }}
-                  className="rounded-lg border border-transparent transition-colors hover:border-line hover:bg-panel-2"
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setDraftTag(on ? null : tag)}
+                  className={`tracked inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[9px] transition-colors ${
+                    on ? m.chip : "border-line text-muted hover:text-fg"
+                  }`}
                 >
-                  {/* Parent row */}
-                  <div className="group flex items-start gap-3 px-2 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggle(t.id)}
-                      className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-[10px] transition-colors ${
-                        done ? "border-lime bg-lime text-[color:var(--color-lime-ink)]" : "border-line text-transparent hover:border-orange"
-                      }`}
-                      aria-label={done ? "Mark not done" : "Mark done"}
-                    >
-                      ✓
-                    </button>
-                    <span
-                      className={`min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-sm transition-colors ${
-                        done ? "text-faint line-through" : "text-fg"
-                      }`}
-                    >
-                      {t.text}
-                    </span>
-
-                    {t.subs.length > 0 && (
-                      <span className="tracked shrink-0 text-[9px] text-faint tabular-nums">
-                        {doneCount}/{t.subs.length}
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => toggleOpen(t.id)}
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-panel-2 hover:text-orange"
-                      aria-label={open ? "Collapse sub-tasks" : "Expand sub-tasks"}
-                      title="Sub-tasks"
-                    >
-                      <motion.span
-                        animate={{ rotate: open ? 180 : 0 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                        className="inline-block text-lg leading-none"
-                      >
-                        ▾
-                      </motion.span>
-                    </button>
-
-                    {onUse && (
-                      <button
-                        type="button"
-                        onClick={() => onUse(t.text)}
-                        className="grid h-7 w-7 shrink-0 place-items-center rounded text-muted opacity-0 transition-all hover:bg-panel-2 hover:text-orange group-hover:opacity-100"
-                        aria-label="Send to composer"
-                        title="Send to deadline composer"
-                      >
-                        <span className="text-sm leading-none">↗</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => remove(t.id)}
-                      className="shrink-0 rounded px-1 text-sm leading-none text-faint opacity-0 transition-all hover:text-orange group-hover:opacity-100"
-                      aria-label="Delete task"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  {/* Sub-tasks — collapsed by default */}
-                  <AnimatePresence initial={false}>
-                    {open && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ type: "spring", stiffness: 320, damping: 34 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="ml-[18px] border-l border-line-soft pl-3 pb-2 pr-2">
-                          <ul className="space-y-1">
-                            {t.subs.map((s) => (
-                              <li key={s.id} className="group/sub flex items-start gap-2.5 py-1">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleSub(t.id, s.id)}
-                                  className={`grid h-4 w-4 shrink-0 place-items-center rounded-[3px] border text-[8px] transition-colors ${
-                                    s.done ? "border-lime bg-lime text-[color:var(--color-lime-ink)]" : "border-line text-transparent hover:border-orange"
-                                  }`}
-                                  aria-label={s.done ? "Mark not done" : "Mark done"}
-                                >
-                                  ✓
-                                </button>
-                                <span
-                                  className={`min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-mono text-xs transition-colors ${
-                                    s.done ? "text-faint line-through" : "text-muted"
-                                  }`}
-                                >
-                                  {s.text}
-                                </span>
-                                {onUse && (
-                                  <button
-                                    type="button"
-                                    onClick={() => onUse(s.text)}
-                                    className="shrink-0 rounded px-1 text-xs leading-none text-faint opacity-0 transition-all hover:text-orange group-hover/sub:opacity-100"
-                                    aria-label="Send to composer"
-                                    title="Send to deadline composer"
-                                  >
-                                    ↗
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => removeSub(t.id, s.id)}
-                                  className="shrink-0 rounded px-1 text-xs leading-none text-faint opacity-0 transition-all hover:text-orange group-hover/sub:opacity-100"
-                                  aria-label="Delete sub-task"
-                                >
-                                  ×
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-
-                          <form onSubmit={(e) => addSub(t.id, e)} className="mt-1.5 flex items-center gap-2">
-                            <span className="text-faint">+</span>
-                            <input
-                              value={subDrafts[t.id] ?? ""}
-                              onChange={(e) => setSubDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
-                              placeholder="Add a sub-task…"
-                              className="min-w-0 flex-1 bg-transparent font-mono text-xs text-fg outline-none placeholder:text-faint"
-                            />
-                          </form>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.li>
+                  <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
+                  {m.label}
+                </button>
               );
             })}
+            <span className="ml-auto hidden font-mono text-[10px] text-faint sm:inline">
+              {"tip: end with → 1h 30m"}
+            </span>
+          </div>
+        </form>
+
+        {items.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-1" role="group" aria-label="Filter by tag">
+            <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="All" count={items.length} />
+            {TAGS.map((tag) => (
+              <FilterChip
+                key={tag}
+                active={filter === tag}
+                onClick={() => setFilter(tag)}
+                label={TAG_META[tag].label}
+                count={counts[tag]}
+                dot={TAG_META[tag].dot}
+              />
+            ))}
+          </div>
+        )}
+
+        <ul className="mt-3 flex flex-col gap-1">
+          <AnimatePresence initial={false}>
+            {visible.map((t) => (
+              <TodoItem
+                key={t.id}
+                todo={t}
+                open={openIds.has(t.id)}
+                tasksById={tasksById}
+                now={now}
+                subDraft={subDrafts[t.id] ?? ""}
+                onSubDraft={(v) => setSubDrafts((d) => ({ ...d, [t.id]: v }))}
+                onToggle={() => toggle(t.id)}
+                onToggleOpen={() => toggleOpen(t.id)}
+                onRemove={() => commit((prev) => prev.filter((x) => x.id !== t.id))}
+                onTag={(tag) => update(t.id, (x) => ({ ...x, tag }))}
+                onAddSub={(e) => addSub(t.id, e)}
+                onToggleSub={(sid) => editSub(t.id, sid, (s) => ({ ...s, done: !s.done }))}
+                onRemoveSub={(sid) => editSub(t.id, sid, () => null)}
+                onUse={
+                  onUse
+                    ? (sub) => onUse({ todoId: t.id, subId: sub?.id, text: sub ? sub.text : t.text })
+                    : undefined
+                }
+              />
+            ))}
           </AnimatePresence>
         </ul>
 
-        {items.length === 0 && (
-          <p className="mt-4 rounded-lg border border-dashed border-line px-4 py-6 text-center tracked text-[10px] text-faint">
-            nothing parked yet
+        {hidden > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            aria-expanded={showAll}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-line py-2.5 tracked text-[10px] text-muted transition-colors hover:border-orange/60 hover:text-orange"
+          >
+            {showAll ? "Show less" : `Show ${hidden} more`}
+            <motion.span
+              animate={{ rotate: showAll ? 180 : 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 24 }}
+              className="grid place-items-center"
+            >
+              <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+            </motion.span>
+          </button>
+        )}
+
+        {filtered.length === 0 && (
+          <p className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-dashed border-line px-4 py-6 text-center tracked text-[10px] text-faint">
+            {filter === "all" ? (
+              "nothing parked yet"
+            ) : (
+              <>
+                <Flag aria-hidden className={`h-3 w-3 ${TAG_META[filter].text}`} />
+                no {TAG_META[filter].label} items
+              </>
+            )}
           </p>
         )}
       </div>
-    </div>
+    </section>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  label,
+  count,
+  dot,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  dot?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`tracked inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[9px] transition-colors ${
+        active ? "bg-panel-2 text-fg ring-1 ring-inset ring-line" : "text-faint hover:text-muted"
+      }`}
+    >
+      {dot && <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${dot}`} />}
+      {label}
+      <span className="tabular-nums opacity-70">{count}</span>
+    </button>
   );
 }

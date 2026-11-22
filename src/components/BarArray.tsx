@@ -1,12 +1,13 @@
 type Props = {
   progress: number; // 0..1 filled
   count?: number;
-  tone?: "orange" | "amber" | "lime" | "cyan" | "muted";
+  tone?: "orange" | "miss" | "amber" | "lime" | "cyan" | "muted";
   className?: string;
 };
 
 const TONE: Record<string, string> = {
   orange: "var(--color-orange)",
+  miss: "var(--color-miss)",
   amber: "var(--color-amber)",
   lime: "var(--color-lime)",
   cyan: "var(--color-cyan)",

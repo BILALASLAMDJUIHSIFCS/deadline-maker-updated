@@ -5,7 +5,23 @@
 import { supabase } from "./supabase";
 import { tracked } from "./sync";
 
-export const THEME_IDS = ["classic", "glass", "brutal", "sage", "crt"] as const;
+export const THEME_IDS = [
+  "classic",
+  "glass",
+  "brutal",
+  "sage",
+  "crt",
+  "linear",
+  "vercel",
+  "stripe",
+  "github",
+  "spotify",
+  "notion",
+  "netflix",
+  "discord",
+  "apple",
+  "nord",
+] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
 export type ThemeMeta = {
@@ -14,11 +30,13 @@ export type ThemeMeta = {
   tagline: string;
   swatch: [string, string, string]; // background, surface, accent
   themeColor: string;
+  group: "original" | "inspired";
 };
 
 export const THEMES: ThemeMeta[] = [
   {
     id: "classic",
+    group: "original",
     name: "Classic Ember",
     tagline: "Original black + ember",
     swatch: ["#000000", "#161616", "#ff6f42"],
@@ -26,6 +44,7 @@ export const THEMES: ThemeMeta[] = [
   },
   {
     id: "glass",
+    group: "original",
     name: "Midnight Glass",
     tagline: "Frosted panels, navy aurora",
     swatch: ["#060a17", "#1b2240", "#ff7a90"],
@@ -33,6 +52,7 @@ export const THEMES: ThemeMeta[] = [
   },
   {
     id: "brutal",
+    group: "original",
     name: "Neo Brutal",
     tagline: "Bold borders, hard shadows",
     swatch: ["#ffde59", "#ffffff", "#ff4f7b"],
@@ -40,6 +60,7 @@ export const THEMES: ThemeMeta[] = [
   },
   {
     id: "sage",
+    group: "original",
     name: "Sage Daylight",
     tagline: "Soft, airy light mode",
     swatch: ["#e9eee8", "#fbfcfa", "#2f8f57"],
@@ -47,10 +68,91 @@ export const THEMES: ThemeMeta[] = [
   },
   {
     id: "crt",
+    group: "original",
     name: "Phosphor CRT",
     tagline: "Amber terminal glow",
     swatch: ["#0b0800", "#1a1200", "#ffb000"],
     themeColor: "#0b0800",
+  },
+  {
+    id: "linear",
+    group: "inspired",
+    name: "Linear",
+    tagline: "Graphite with indigo focus",
+    swatch: ["#08090a", "#1c1d21", "#5e6ad2"],
+    themeColor: "#08090a",
+  },
+  {
+    id: "vercel",
+    group: "inspired",
+    name: "Vercel",
+    tagline: "Pure black, Geist, monochrome",
+    swatch: ["#000000", "#111111", "#ededed"],
+    themeColor: "#000000",
+  },
+  {
+    id: "stripe",
+    group: "inspired",
+    name: "Stripe",
+    tagline: "Crisp white, blurple, soft depth",
+    swatch: ["#f6f9fc", "#ffffff", "#635bff"],
+    themeColor: "#f6f9fc",
+  },
+  {
+    id: "github",
+    group: "inspired",
+    name: "GitHub Dimmed",
+    tagline: "Slate dim mode for long sessions",
+    swatch: ["#22272e", "#2d333b", "#f69d50"],
+    themeColor: "#22272e",
+  },
+  {
+    id: "spotify",
+    group: "inspired",
+    name: "Spotify",
+    tagline: "Deep black and signature green",
+    swatch: ["#121212", "#242424", "#1ed760"],
+    themeColor: "#121212",
+  },
+  {
+    id: "notion",
+    group: "inspired",
+    name: "Notion",
+    tagline: "Paper white, quiet ink",
+    swatch: ["#f7f7f5", "#ffffff", "#2383e2"],
+    themeColor: "#f7f7f5",
+  },
+  {
+    id: "netflix",
+    group: "inspired",
+    name: "Netflix",
+    tagline: "Cinema black, marquee red",
+    swatch: ["#000000", "#181818", "#e50914"],
+    themeColor: "#000000",
+  },
+  {
+    id: "discord",
+    group: "inspired",
+    name: "Discord",
+    tagline: "Cozy charcoal, blurple pop",
+    swatch: ["#313338", "#2b2d31", "#5865f2"],
+    themeColor: "#313338",
+  },
+  {
+    id: "apple",
+    group: "inspired",
+    name: "Apple",
+    tagline: "Light gray, calm blue",
+    swatch: ["#f5f5f7", "#ffffff", "#0071e3"],
+    themeColor: "#f5f5f7",
+  },
+  {
+    id: "nord",
+    group: "inspired",
+    name: "Nord",
+    tagline: "Arctic frost blues",
+    swatch: ["#2e3440", "#3b4252", "#88c0d0"],
+    themeColor: "#2e3440",
   },
 ];
 
@@ -126,6 +228,12 @@ async function pushThemePref(pref: ThemePref) {
         { id: SETTINGS_ID, theme: pref.theme, updated_at: pref.updatedAt },
         { onConflict: "id" }
       );
+    // 23514 = the database still has the old 5-theme check constraint; keep the
+    // choice on this device until the later-list migration is applied.
+    if (error?.code === "23514") {
+      console.warn("[supabase] theme not saved remotely — run supabase/migrations/20261122000000_later_list_upgrades.sql");
+      return;
+    }
     if (error) throw error;
   });
 }

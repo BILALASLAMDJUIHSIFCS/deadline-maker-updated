@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
+import { ArrowLeft, Check, PictureInPicture2, X } from "lucide-react";
 import BarArray from "./BarArray";
 import { type Task } from "../lib/storage";
 
@@ -72,9 +73,10 @@ export default function FullscreenTimer({ task, onDone, onClose }: Props) {
       <div className="absolute inset-x-0 top-0 flex items-center justify-between px-6 py-4">
         <button
           onClick={onClose}
-          className="tracked rounded-md border border-line bg-panel px-4 py-2 text-[10px] text-muted transition-colors hover:border-orange hover:text-orange"
+          className="tracked flex items-center gap-2 rounded-md border border-line bg-panel px-4 py-2 text-[10px] text-muted transition-colors hover:border-orange hover:text-orange"
         >
-          ← back
+          <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
+          back
         </button>
         <PipButton task={task} onDone={onDone} />
       </div>
@@ -137,7 +139,10 @@ export default function FullscreenTimer({ task, onDone, onClose }: Props) {
             }}
             className="group relative overflow-hidden rounded-lg bg-lime px-8 py-4 font-mono text-sm font-bold uppercase tracking-wider text-[color:var(--color-lime-ink)] transition-transform active:scale-[0.97]"
           >
-            <span className="relative z-10">✓ Mark Done</span>
+            <span className="relative z-10 flex items-center gap-2">
+              <Check aria-hidden className="h-4 w-4" strokeWidth={3} />
+              Mark Done
+            </span>
             <span className="absolute inset-0 -translate-x-full bg-white/25 transition-transform duration-300 group-hover:translate-x-0" />
           </button>
         </div>
@@ -298,9 +303,10 @@ function PipButton({ task, onDone }: { task: Task; onDone: () => void }) {
     <button
       onClick={openPip}
       title="Pop-out mini timer (Picture-in-Picture)"
-      className="tracked rounded-md border border-line bg-panel px-4 py-2 text-[10px] text-muted transition-colors hover:border-cyan hover:text-cyan"
+      className="tracked flex items-center gap-2 rounded-md border border-line bg-panel px-4 py-2 text-[10px] text-muted transition-colors hover:border-cyan hover:text-cyan"
     >
-      📌 pip
+      <PictureInPicture2 aria-hidden className="h-3.5 w-3.5" />
+      pop out
     </button>
   );
 }
@@ -585,9 +591,10 @@ function InPageMiniFloat({
         </span>
         <button
           onClick={onClose}
-          className="text-[14px] leading-none text-faint transition-colors hover:text-orange"
+          aria-label="Close mini timer"
+          className="grid h-6 w-6 place-items-center rounded text-faint transition-colors hover:text-orange"
         >
-          ×
+          <X aria-hidden className="h-3.5 w-3.5" />
         </button>
       </div>
       <div className="flex flex-col items-center px-4 py-4">
@@ -618,9 +625,10 @@ function InPageMiniFloat({
             onDone();
             onClose();
           }}
-          className="mt-3 w-full rounded-lg border border-lime/30 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-lime transition-colors hover:bg-lime hover:text-[color:var(--color-lime-ink)]"
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-lime/30 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-lime transition-colors hover:bg-lime hover:text-[color:var(--color-lime-ink)]"
         >
-          ✓ done
+          <Check aria-hidden className="h-3.5 w-3.5" strokeWidth={3} />
+          done
         </button>
       </div>
     </motion.div>
