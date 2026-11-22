@@ -20,7 +20,7 @@ export default function ProgressPanel({ tasks }: { tasks: Task[] }) {
   return (
     <section
       aria-labelledby="progress-title"
-      className="surface relative isolate mt-6 rounded-2xl border border-line bg-panel"
+      className="surface panel-fx relative isolate mt-6 rounded-2xl border border-line bg-panel"
     >
       <CornerGlow />
       <div className="flex items-center gap-2 border-b border-line-soft px-5 py-2.5">

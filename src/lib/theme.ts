@@ -7,20 +7,17 @@ import { tracked } from "./sync";
 
 export const THEME_IDS = [
   "classic",
-  "glass",
   "brutal",
-  "sage",
-  "crt",
-  "linear",
-  "vercel",
-  "stripe",
-  "github",
-  "spotify",
-  "notion",
-  "netflix",
-  "discord",
-  "apple",
-  "nord",
+  "molten",
+  "sphere",
+  "dopamine",
+  "citrus",
+  "cobalt",
+  "turbine",
+  "bloom",
+  "pixel",
+  "honey",
+  "porcelain",
 ] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
@@ -30,129 +27,137 @@ export type ThemeMeta = {
   tagline: string;
   swatch: [string, string, string]; // background, surface, accent
   themeColor: string;
-  group: "original" | "inspired";
+  group: "original" | "collection";
+  mode: "dark" | "light";
+  /** The theme's signature animation. */
+  motion: string;
+  /** Set when the theme's UI kit is built on a real third-party library. */
+  engine?: string;
 };
 
 export const THEMES: ThemeMeta[] = [
   {
     id: "classic",
     group: "original",
+    mode: "dark",
     name: "Classic Ember",
     tagline: "Original black + ember",
+    motion: "Ember corner glow",
     swatch: ["#000000", "#161616", "#ff6f42"],
     themeColor: "#000000",
   },
   {
-    id: "glass",
-    group: "original",
-    name: "Midnight Glass",
-    tagline: "Frosted panels, navy aurora",
-    swatch: ["#060a17", "#1b2240", "#ff7a90"],
-    themeColor: "#060a17",
-  },
-  {
     id: "brutal",
     group: "original",
+    mode: "light",
     name: "Neo Brutal",
     tagline: "Bold borders, hard shadows",
+    motion: "Hard-shadow press",
     swatch: ["#ffde59", "#ffffff", "#ff4f7b"],
     themeColor: "#ffde59",
   },
   {
-    id: "sage",
-    group: "original",
-    name: "Sage Daylight",
-    tagline: "Soft, airy light mode",
-    swatch: ["#e9eee8", "#fbfcfa", "#2f8f57"],
-    themeColor: "#e9eee8",
+    id: "molten",
+    group: "collection",
+    mode: "dark",
+    name: "Molten Switch",
+    tagline: "Frosted graphite, molten orange",
+    motion: "Cursor spotlight ignites every rim",
+    engine: "shadcn/ui Switch · Radix",
+    swatch: ["#17181b", "#2a2b30", "#ff6a1a"],
+    themeColor: "#17181b",
   },
   {
-    id: "crt",
-    group: "original",
-    name: "Phosphor CRT",
-    tagline: "Amber terminal glow",
-    swatch: ["#0b0800", "#1a1200", "#ffb000"],
-    themeColor: "#0b0800",
+    id: "sphere",
+    group: "collection",
+    mode: "dark",
+    name: "Magic Sphere",
+    tagline: "Iridescent orb on deep black",
+    motion: "Live WebGL shader sphere",
+    engine: "OGL · WebGL",
+    swatch: ["#07050b", "#1a1222", "#d946ef"],
+    themeColor: "#07050b",
   },
   {
-    id: "linear",
-    group: "inspired",
-    name: "Linear",
-    tagline: "Graphite with indigo focus",
-    swatch: ["#08090a", "#1c1d21", "#5e6ad2"],
-    themeColor: "#08090a",
+    id: "dopamine",
+    group: "collection",
+    mode: "dark",
+    name: "Dopamine Blur",
+    tagline: "Squircle widgets, vivid blooms",
+    motion: "Color fields drift inside cards",
+    swatch: ["#26343a", "#3a1f4d", "#c4ff3a"],
+    themeColor: "#26343a",
   },
   {
-    id: "vercel",
-    group: "inspired",
-    name: "Vercel",
-    tagline: "Pure black, Geist, monochrome",
-    swatch: ["#000000", "#111111", "#ededed"],
-    themeColor: "#000000",
+    id: "citrus",
+    group: "collection",
+    mode: "light",
+    name: "Citrus Frost",
+    tagline: "Milky glass on lime light",
+    motion: "Receipt deck fans on hover",
+    swatch: ["#d8d86a", "#f6f7ef", "#2f7d4f"],
+    themeColor: "#d8d86a",
   },
   {
-    id: "stripe",
-    group: "inspired",
-    name: "Stripe",
-    tagline: "Crisp white, blurple, soft depth",
-    swatch: ["#f6f9fc", "#ffffff", "#635bff"],
-    themeColor: "#f6f9fc",
+    id: "cobalt",
+    group: "collection",
+    mode: "dark",
+    name: "Cobalt Wallet",
+    tagline: "Electric blue glass, glossy pills",
+    motion: "Orbiting rim light",
+    swatch: ["#050a2e", "#121a4a", "#3d8bff"],
+    themeColor: "#050a2e",
   },
   {
-    id: "github",
-    group: "inspired",
-    name: "GitHub Dimmed",
-    tagline: "Slate dim mode for long sessions",
-    swatch: ["#22272e", "#2d333b", "#f69d50"],
-    themeColor: "#22272e",
+    id: "turbine",
+    group: "collection",
+    mode: "dark",
+    name: "Turbine",
+    tagline: "Device UI, mint gauges",
+    motion: "Fan orb spins faster near deadline",
+    swatch: ["#1a1b1d", "#242528", "#5ef2c2"],
+    themeColor: "#1a1b1d",
   },
   {
-    id: "spotify",
-    group: "inspired",
-    name: "Spotify",
-    tagline: "Deep black and signature green",
-    swatch: ["#121212", "#242424", "#1ed760"],
-    themeColor: "#121212",
+    id: "bloom",
+    group: "collection",
+    mode: "dark",
+    name: "Bloom",
+    tagline: "Smoked glass over blurred lilies",
+    motion: "Slow camera focus pull",
+    swatch: ["#3a2a30", "#4a3a40", "#c4f07a"],
+    themeColor: "#2a1d22",
   },
   {
-    id: "notion",
-    group: "inspired",
-    name: "Notion",
-    tagline: "Paper white, quiet ink",
-    swatch: ["#f7f7f5", "#ffffff", "#2383e2"],
-    themeColor: "#f7f7f5",
+    id: "pixel",
+    group: "collection",
+    mode: "dark",
+    name: "Pixel Dial",
+    tagline: "Dot-matrix digits, violet arcs",
+    motion: "Seconds dial boots & sweeps",
+    engine: "GSAP timelines",
+    swatch: ["#120d1d", "#1d1530", "#9b6bff"],
+    themeColor: "#120d1d",
   },
   {
-    id: "netflix",
-    group: "inspired",
-    name: "Netflix",
-    tagline: "Cinema black, marquee red",
-    swatch: ["#000000", "#181818", "#e50914"],
-    themeColor: "#000000",
+    id: "honey",
+    group: "collection",
+    mode: "light",
+    name: "Honey Task",
+    tagline: "Warm glass, barcode progress",
+    motion: "Barcode shimmer + sparkles",
+    swatch: ["#ececea", "#ffd77a", "#e07b00"],
+    themeColor: "#ececea",
   },
   {
-    id: "discord",
-    group: "inspired",
-    name: "Discord",
-    tagline: "Cozy charcoal, blurple pop",
-    swatch: ["#313338", "#2b2d31", "#5865f2"],
-    themeColor: "#313338",
-  },
-  {
-    id: "apple",
-    group: "inspired",
-    name: "Apple",
-    tagline: "Light gray, calm blue",
-    swatch: ["#f5f5f7", "#ffffff", "#0071e3"],
-    themeColor: "#f5f5f7",
-  },
-  {
-    id: "nord",
-    group: "inspired",
-    name: "Nord",
-    tagline: "Arctic frost blues",
-    swatch: ["#2e3440", "#3b4252", "#88c0d0"],
-    themeColor: "#2e3440",
+    id: "porcelain",
+    group: "collection",
+    mode: "light",
+    name: "Porcelain",
+    tagline: "Soft white menus, keycaps",
+    motion: "Magnetic hover pill",
+    swatch: ["#f1f1f3", "#ffffff", "#ec4899"],
+    themeColor: "#f1f1f3",
   },
 ];
 
@@ -193,7 +198,9 @@ export function applyTheme(theme: ThemeId) {
   if (theme === "classic") delete root.dataset.theme;
   else root.dataset.theme = theme;
 
-  const color = THEMES.find((t) => t.id === theme)?.themeColor ?? "#000000";
+  const meta0 = THEMES.find((t) => t.id === theme);
+  root.dataset.mode = meta0?.mode ?? "dark";
+  const color = meta0?.themeColor ?? "#000000";
   let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (!meta) {
     meta = document.createElement("meta");
@@ -228,10 +235,10 @@ async function pushThemePref(pref: ThemePref) {
         { id: SETTINGS_ID, theme: pref.theme, updated_at: pref.updatedAt },
         { onConflict: "id" }
       );
-    // 23514 = the database still has the old 5-theme check constraint; keep the
-    // choice on this device until the later-list migration is applied.
+    // 23514 = the database still has an older theme check constraint; keep the
+    // choice on this device until the new-themes migration is applied.
     if (error?.code === "23514") {
-      console.warn("[supabase] theme not saved remotely — run supabase/migrations/20261122000000_later_list_upgrades.sql");
+      console.warn("[supabase] theme not saved remotely — run supabase/migrations/20261123000000_pause_and_new_themes.sql");
       return;
     }
     if (error) throw error;

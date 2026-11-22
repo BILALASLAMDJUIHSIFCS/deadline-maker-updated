@@ -2,16 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, Check, PictureInPicture2, X } from "lucide-react";
 import BarArray from "./BarArray";
+import PauseSwitch from "./PauseSwitch";
 import { type Task } from "../lib/storage";
+import { durationMs, isPaused, progressOf, remainingMs } from "../lib/taskTime";
 
 /* ── TypeScript shim for the Document Picture-in-Picture API ──────────── */
 declare global {
   interface Window {
     documentPictureInPicture?: {
-      requestWindow(options?: {
-        width?: number;
-        height?: number;
-      }): Promise<Window>;
+      requestWindow(options?: { width?: number; height?: number }): Promise<Window>;
     };
   }
 }
@@ -19,6 +18,7 @@ declare global {
 type Props = {
   task: Task;
   onDone: () => void;
+  onTogglePause: () => void;
   onClose: () => void;
 };
 
@@ -34,11 +34,18 @@ function decompose(ms: number) {
   return { h, m, s };
 }
 
+// Keeps the latest value in a ref so long-lived PiP listeners never go stale.
+function useLatest<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Fullscreen Timer — large immersive overlay
    ═══════════════════════════════════════════════════════════════════════ */
 
-export default function FullscreenTimer({ task, onDone, onClose }: Props) {
+export default function FullscreenTimer({ task, onDone, onTogglePause, onClose }: Props) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -51,12 +58,20 @@ export default function FullscreenTimer({ task, onDone, onClose }: Props) {
     if (task.status !== "active") onClose();
   }, [task.status, onClose]);
 
-  const total = task.deadline - task.createdAt;
-  const remaining = Math.max(0, task.deadline - now);
-  const progress = total > 0 ? Math.min(1, (now - task.createdAt) / total) : 1;
-  const urgent = remaining < 60_000 * 5;
+  const total = durationMs(task);
+  const remaining = remainingMs(task, now);
+  const progress = Math.min(1, progressOf(task, now));
+  const paused = isPaused(task);
+  const urgent = !paused && remaining < 60_000 * 5;
   const { h, m, s } = decompose(remaining);
-  const tone: "cyan" | "amber" | "orange" = remaining <= 0 ? "orange" : urgent ? "amber" : "cyan";
+  const tone: "cyan" | "amber" | "orange" | "muted" = paused
+    ? "muted"
+    : remaining <= 0
+    ? "orange"
+    : urgent
+    ? "amber"
+    : "cyan";
+  const toneText = { muted: "text-muted", orange: "text-orange", amber: "text-amber", cyan: "text-cyan" }[tone];
 
   const pctLeft = total > 0 ? Math.round((remaining / total) * 100) : 0;
 
@@ -78,15 +93,12 @@ export default function FullscreenTimer({ task, onDone, onClose }: Props) {
           <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
           back
         </button>
-        <PipButton task={task} onDone={onDone} />
+        <PipButton task={task} onDone={onDone} onTogglePause={onTogglePause} />
       </div>
 
       {/* Center content */}
       <div className="flex w-full max-w-3xl flex-col items-center px-6">
-        {/* Task title */}
-        <h2 className="text-center font-mono text-lg font-semibold text-fg sm:text-2xl">
-          {task.title}
-        </h2>
+        <h2 className="text-center font-mono text-lg font-semibold text-fg sm:text-2xl">{task.title}</h2>
 
         {task.consequence && (
           <p className="mt-3 rounded-md border border-line bg-panel-2 px-4 py-2 text-center font-mono text-xs text-muted">
@@ -94,44 +106,23 @@ export default function FullscreenTimer({ task, onDone, onClose }: Props) {
           </p>
         )}
 
-        {/* Giant timer */}
         <div className="mt-10 select-none sm:mt-16">
           <span
-            className={`display tabular-nums leading-none ${
-              tone === "orange"
-                ? "text-orange"
-                : tone === "amber"
-                ? "text-amber"
-                : "text-cyan"
-            }`}
+            className={`display tabular-nums leading-none ${toneText} ${paused ? "ember-pulse" : ""}`}
             style={{ fontSize: "clamp(4rem, 18vw, 11rem)" }}
           >
             {pad(h)}:{pad(m)}:{pad(s)}
           </span>
         </div>
 
-        {/* Percentage */}
-        <p
-          className={`mt-4 tracked text-[11px] ${
-            tone === "orange"
-              ? "text-orange"
-              : tone === "amber"
-              ? "text-amber"
-              : "text-muted"
-          }`}
-        >
-          {pctLeft}% remaining
+        <p className={`mt-4 tracked text-[11px] ${paused ? "text-orange" : toneText}`} aria-live="polite">
+          {paused ? "paused — the clock is stopped" : `${pctLeft}% remaining`}
         </p>
 
-        {/* Progress bar */}
-        <BarArray
-          progress={progress}
-          tone={tone}
-          className="mt-8 h-3 w-full"
-        />
+        <BarArray progress={progress} tone={tone} className="mt-8 h-3 w-full" />
 
-        {/* Actions */}
-        <div className="mt-10 flex items-center gap-4">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          <PauseSwitch size="lg" paused={paused} onToggle={onTogglePause} />
           <button
             onClick={() => {
               onDone();
@@ -152,150 +143,147 @@ export default function FullscreenTimer({ task, onDone, onClose }: Props) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   Shared Document Picture-in-Picture window
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const PIP_STYLE = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a; color: #ffffff;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh; overflow: hidden; user-select: none;
+  }
+  .title {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #8a8a90;
+    max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+  }
+  .timer {
+    font-family: 'Doto', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 52px; font-weight: 700; line-height: 1; margin-top: 8px; font-variant-numeric: tabular-nums;
+  }
+  .timer.cyan { color: #35d6c4; } .timer.amber { color: #f5a524; } .timer.red { color: #ff6f42; }
+  .timer.paused { color: #8a8a90; animation: blink 1.5s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: 0.4; } }
+  .bar-track { width: 85%; height: 5px; background: rgba(255,255,255,0.09); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease, background 0.3s ease; }
+  .bar-fill.cyan { background: #35d6c4; } .bar-fill.amber { background: #f5a524; }
+  .bar-fill.red { background: #ff6f42; } .bar-fill.paused { background: #8a8a90; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .btn {
+    font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; padding: 5px 14px; border-radius: 6px; cursor: pointer; background: transparent;
+  }
+  .btn-done { border: 1px solid #9bd633; color: #9bd633; }
+  .btn-done:hover { background: #9bd633; color: #0d1a02; }
+  .btn-pause { border: 1px solid #ff6f42; color: #ff6f42; }
+  .btn-pause:hover, .btn-pause.on { background: #ff6f42; color: #1a0d07; }
+  .btn-close { border: 1px solid #444; color: #888; }
+  .btn-close:hover { border-color: #ff6f42; color: #ff6f42; }
+`;
+
+type PipHandlers = {
+  getTask: () => Task;
+  onDone: () => void;
+  onTogglePause: () => void;
+  withClose?: boolean;
+};
+
+// Builds the PiP UI and returns a stop() for its update loop.
+function mountPip(pip: Window, { getTask, onDone, onTogglePause, withClose }: PipHandlers): () => void {
+  const task = getTask();
+  pip.document.head.innerHTML = `<style>${PIP_STYLE}</style>`;
+  pip.document.body.innerHTML = `
+    <div class="title">${task.title.replace(/</g, "&lt;")}</div>
+    <div id="clock" class="timer cyan">00:00:00</div>
+    <div class="bar-track"><div id="bar" class="bar-fill cyan" style="width:0%"></div></div>
+    <div class="actions">
+      <button id="pause-btn" class="btn btn-pause">❚❚ pause</button>
+      <button id="done-btn" class="btn btn-done">✓ done</button>
+      ${withClose ? '<button id="close-btn" class="btn btn-close" aria-label="Close">✕</button>' : ""}
+    </div>
+  `;
+
+  pip.document.getElementById("done-btn")?.addEventListener("click", () => {
+    onDone();
+    pip.close();
+  });
+  pip.document.getElementById("pause-btn")?.addEventListener("click", () => onTogglePause());
+  pip.document.getElementById("close-btn")?.addEventListener("click", () => pip.close());
+
+  const update = () => {
+    const t = getTask();
+    const now = Date.now();
+    const paused = isPaused(t);
+    const rem = remainingMs(t, now);
+    const prog = Math.min(1, progressOf(t, now));
+    const { h, m, s } = decompose(rem);
+    const cls = paused ? "paused" : rem <= 0 ? "red" : rem < 60_000 * 5 ? "amber" : "cyan";
+
+    const clock = pip.document.getElementById("clock");
+    const bar = pip.document.getElementById("bar");
+    const pause = pip.document.getElementById("pause-btn");
+    if (clock) {
+      clock.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+      clock.className = `timer ${cls}`;
+    }
+    if (bar) {
+      bar.style.width = `${prog * 100}%`;
+      bar.className = `bar-fill ${cls}`;
+    }
+    if (pause) {
+      pause.textContent = paused ? "▶ resume" : "❚❚ pause";
+      pause.className = `btn btn-pause${paused ? " on" : ""}`;
+    }
+  };
+
+  update();
+  const id = window.setInterval(update, 200);
+  return () => window.clearInterval(id);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    PiP Button — launches a Document Picture-in-Picture floating timer
    ═══════════════════════════════════════════════════════════════════════ */
 
-function PipButton({ task, onDone }: { task: Task; onDone: () => void }) {
+function PipButton({ task, onDone, onTogglePause }: Omit<Props, "onClose">) {
   const pipRef = useRef<Window | null>(null);
-  const intervalRef = useRef<number | undefined>(undefined);
+  const stopRef = useRef<(() => void) | null>(null);
+  const taskRef = useLatest(task);
+  const doneRef = useLatest(onDone);
+  const pauseRef = useLatest(onTogglePause);
 
   const hasPip = typeof window !== "undefined" && !!window.documentPictureInPicture;
 
   const cleanup = useCallback(() => {
-    if (intervalRef.current) window.clearInterval(intervalRef.current);
-    intervalRef.current = undefined;
+    stopRef.current?.();
+    stopRef.current = null;
     pipRef.current = null;
   }, []);
 
-  useEffect(() => () => {
-    cleanup();
-    pipRef.current?.close();
-  }, [cleanup]);
+  useEffect(
+    () => () => {
+      pipRef.current?.close();
+      cleanup();
+    },
+    [cleanup]
+  );
 
   const openPip = useCallback(async () => {
     if (!window.documentPictureInPicture) return;
-
     try {
-      const pip = await window.documentPictureInPicture.requestWindow({
-        width: 340,
-        height: 220,
-      });
+      const pip = await window.documentPictureInPicture.requestWindow({ width: 360, height: 230 });
       pipRef.current = pip;
-
-      // Inject styles
-      pip.document.head.innerHTML = `
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-            background: #0a0a0a;
-            color: #ffffff;
-            font-family: 'JetBrains Mono', monospace;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-            user-select: none;
-          }
-          .title {
-            font-size: 11px;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            color: #8a8a90;
-            max-width: 90%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            text-align: center;
-          }
-          .timer {
-            font-family: 'Doto', 'JetBrains Mono', monospace;
-            font-size: 56px;
-            font-weight: 700;
-            line-height: 1;
-            margin-top: 10px;
-            font-variant-numeric: tabular-nums;
-          }
-          .timer.cyan { color: #35d6c4; }
-          .timer.amber { color: #f5a524; }
-          .timer.red { color: #ff6f42; }
-          .bar-track {
-            width: 85%;
-            height: 6px;
-            background: rgba(255,255,255,0.09);
-            border-radius: 3px;
-            margin-top: 14px;
-            overflow: hidden;
-          }
-          .bar-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.3s ease, background 0.3s ease;
-          }
-          .bar-fill.cyan { background: #35d6c4; }
-          .bar-fill.amber { background: #f5a524; }
-          .bar-fill.red { background: #ff6f42; }
-          .btn {
-            margin-top: 14px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            padding: 6px 20px;
-            border: 1px solid #9bd633;
-            background: transparent;
-            color: #9bd633;
-            border-radius: 6px;
-            cursor: pointer;
-          }
-          .btn:hover { background: #9bd633; color: #0d1a02; }
-        </style>
-      `;
-
-      pip.document.body.innerHTML = `
-        <div class="title">${task.title.replace(/</g, "&lt;")}</div>
-        <div id="clock" class="timer cyan">00:00:00</div>
-        <div class="bar-track"><div id="bar" class="bar-fill cyan" style="width:0%"></div></div>
-        <button id="done-btn" class="btn">✓ done</button>
-      `;
-
-      // Wire up done button
-      pip.document.getElementById("done-btn")?.addEventListener("click", () => {
-        onDone();
-        pip.close();
+      stopRef.current = mountPip(pip, {
+        getTask: () => taskRef.current,
+        onDone: () => doneRef.current(),
+        onTogglePause: () => pauseRef.current(),
       });
-
-      // Update every 200ms
-      const update = () => {
-        const now = Date.now();
-        const rem = Math.max(0, task.deadline - now);
-        const tot = task.deadline - task.createdAt;
-        const prog = tot > 0 ? Math.min(1, (now - task.createdAt) / tot) : 1;
-        const urg = rem < 60_000 * 5;
-        const { h, m, s } = decompose(rem);
-        const cls = rem <= 0 ? "red" : urg ? "amber" : "cyan";
-
-        const clock = pip.document.getElementById("clock");
-        const bar = pip.document.getElementById("bar");
-        if (clock) {
-          clock.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
-          clock.className = `timer ${cls}`;
-        }
-        if (bar) {
-          bar.style.width = `${prog * 100}%`;
-          bar.className = `bar-fill ${cls}`;
-        }
-      };
-
-      update();
-      intervalRef.current = window.setInterval(update, 200);
-
       pip.addEventListener("pagehide", cleanup);
     } catch (err) {
       console.error("[pip]", err);
     }
-  }, [task, onDone, cleanup]);
+  }, [cleanup, taskRef, doneRef, pauseRef]);
 
   if (!hasPip) return null;
 
@@ -316,25 +304,20 @@ function PipButton({ task, onDone }: { task: Task; onDone: () => void }) {
    Falls back to a draggable in-page widget when PiP is unavailable.
    ═══════════════════════════════════════════════════════════════════════ */
 
-export function MiniFloat({
-  task,
-  onDone,
-  onClose,
-}: {
-  task: Task;
-  onDone: () => void;
-  onClose: () => void;
-}) {
+export function MiniFloat({ task, onDone, onTogglePause, onClose }: Props) {
   const pipRef = useRef<Window | null>(null);
-  const intervalRef = useRef<number | undefined>(undefined);
+  const stopRef = useRef<(() => void) | null>(null);
   const launched = useRef(false);
+  const taskRef = useLatest(task);
+  const doneRef = useLatest(onDone);
+  const pauseRef = useLatest(onTogglePause);
+  const closeRef = useLatest(onClose);
 
-  const hasPip =
-    typeof window !== "undefined" && !!window.documentPictureInPicture;
+  const hasPip = typeof window !== "undefined" && !!window.documentPictureInPicture;
 
   const cleanup = useCallback(() => {
-    if (intervalRef.current) window.clearInterval(intervalRef.current);
-    intervalRef.current = undefined;
+    stopRef.current?.();
+    stopRef.current = null;
     pipRef.current = null;
   }, []);
 
@@ -350,8 +333,8 @@ export function MiniFloat({
   // On unmount, close the PiP window
   useEffect(
     () => () => {
-      cleanup();
       pipRef.current?.close();
+      cleanup();
     },
     [cleanup]
   );
@@ -360,181 +343,42 @@ export function MiniFloat({
   useEffect(() => {
     if (launched.current) return;
     launched.current = true;
-
-    if (!hasPip) return; // fall through to in-page fallback
+    if (!hasPip) return;
 
     void (async () => {
       try {
-        const pip = await window.documentPictureInPicture!.requestWindow({
-          width: 340,
-          height: 220,
-        });
+        const pip = await window.documentPictureInPicture!.requestWindow({ width: 360, height: 230 });
         pipRef.current = pip;
-
-        pip.document.head.innerHTML = `
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-              background: #0a0a0a;
-              color: #ffffff;
-              font-family: 'JetBrains Mono', ui-monospace, monospace;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              height: 100vh;
-              overflow: hidden;
-              user-select: none;
-            }
-            .title {
-              font-size: 11px;
-              letter-spacing: 0.16em;
-              text-transform: uppercase;
-              color: #8a8a90;
-              max-width: 90%;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              white-space: nowrap;
-              text-align: center;
-            }
-            .timer {
-              font-family: 'Doto', 'JetBrains Mono', ui-monospace, monospace;
-              font-size: 52px;
-              font-weight: 700;
-              line-height: 1;
-              margin-top: 8px;
-              font-variant-numeric: tabular-nums;
-            }
-            .timer.cyan { color: #35d6c4; }
-            .timer.amber { color: #f5a524; }
-            .timer.red { color: #ff6f42; }
-            .bar-track {
-              width: 85%;
-              height: 5px;
-              background: rgba(255,255,255,0.09);
-              border-radius: 3px;
-              margin-top: 12px;
-              overflow: hidden;
-            }
-            .bar-fill {
-              height: 100%;
-              border-radius: 3px;
-              transition: width 0.3s ease, background 0.3s ease;
-            }
-            .bar-fill.cyan { background: #35d6c4; }
-            .bar-fill.amber { background: #f5a524; }
-            .bar-fill.red { background: #ff6f42; }
-            .actions { display: flex; gap: 8px; margin-top: 12px; }
-            .btn {
-              font-family: 'JetBrains Mono', ui-monospace, monospace;
-              font-size: 10px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              padding: 5px 16px;
-              border-radius: 6px;
-              cursor: pointer;
-            }
-            .btn-done {
-              border: 1px solid #9bd633;
-              background: transparent;
-              color: #9bd633;
-            }
-            .btn-done:hover { background: #9bd633; color: #0d1a02; }
-            .btn-close {
-              border: 1px solid #444;
-              background: transparent;
-              color: #888;
-            }
-            .btn-close:hover { border-color: #ff6f42; color: #ff6f42; }
-          </style>
-        `;
-
-        pip.document.body.innerHTML = `
-          <div class="title">${task.title.replace(/</g, "&lt;")}</div>
-          <div id="clock" class="timer cyan">00:00:00</div>
-          <div class="bar-track"><div id="bar" class="bar-fill cyan" style="width:0%"></div></div>
-          <div class="actions">
-            <button id="done-btn" class="btn btn-done">✓ done</button>
-            <button id="close-btn" class="btn btn-close">✕</button>
-          </div>
-        `;
-
-        pip.document
-          .getElementById("done-btn")
-          ?.addEventListener("click", () => {
-            onDone();
-            pip.close();
-          });
-
-        pip.document
-          .getElementById("close-btn")
-          ?.addEventListener("click", () => {
-            pip.close();
-          });
-
-        // Update loop
-        const update = () => {
-          const now = Date.now();
-          const rem = Math.max(0, task.deadline - now);
-          const tot = task.deadline - task.createdAt;
-          const prog =
-            tot > 0 ? Math.min(1, (now - task.createdAt) / tot) : 1;
-          const urg = rem < 60_000 * 5;
-          const { h, m, s } = decompose(rem);
-          const cls = rem <= 0 ? "red" : urg ? "amber" : "cyan";
-
-          const clock = pip.document.getElementById("clock");
-          const bar = pip.document.getElementById("bar");
-          if (clock) {
-            clock.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
-            clock.className = `timer ${cls}`;
-          }
-          if (bar) {
-            bar.style.width = `${prog * 100}%`;
-            bar.className = `bar-fill ${cls}`;
-          }
-        };
-
-        update();
-        intervalRef.current = window.setInterval(update, 200);
-
-        // When the PiP window is closed by the user, clean up and notify parent
+        stopRef.current = mountPip(pip, {
+          getTask: () => taskRef.current,
+          onDone: () => doneRef.current(),
+          onTogglePause: () => pauseRef.current(),
+          withClose: true,
+        });
         pip.addEventListener("pagehide", () => {
           cleanup();
-          onClose();
+          closeRef.current();
         });
       } catch (err) {
         console.error("[mini-pip]", err);
-        // PiP failed — stay mounted so the in-page fallback shows
       }
     })();
-  }, []);
+  }, [hasPip, cleanup, taskRef, doneRef, pauseRef, closeRef]);
 
-  // ── If PiP is active, render nothing in the page ──
-  // (The timer lives in the external PiP window.)
   if (hasPip) return null;
 
-  // ── Fallback: draggable in-page floating widget ──
-  return <InPageMiniFloat task={task} onDone={onDone} onClose={onClose} />;
+  return <InPageMiniFloat task={task} onDone={onDone} onTogglePause={onTogglePause} onClose={onClose} />;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   InPageMiniFloat — the original draggable in-page fallback
+   InPageMiniFloat — draggable in-page fallback
    ═══════════════════════════════════════════════════════════════════════ */
 
-function InPageMiniFloat({
-  task,
-  onDone,
-  onClose,
-}: {
-  task: Task;
-  onDone: () => void;
-  onClose: () => void;
-}) {
+function InPageMiniFloat({ task, onDone, onTogglePause, onClose }: Props) {
   const [now, setNow] = useState(Date.now());
   const [pos, setPos] = useState({
     x: typeof window !== "undefined" ? window.innerWidth - 330 : 100,
-    y: typeof window !== "undefined" ? window.innerHeight - 210 : 100,
+    y: typeof window !== "undefined" ? window.innerHeight - 230 : 100,
   });
   const dragging = useRef(false);
   const offset = useRef({ x: 0, y: 0 });
@@ -548,12 +392,12 @@ function InPageMiniFloat({
     if (task.status !== "active") onClose();
   }, [task.status, onClose]);
 
-  const remaining = Math.max(0, task.deadline - now);
-  const total = task.deadline - task.createdAt;
-  const progress = total > 0 ? Math.min(1, (now - task.createdAt) / total) : 1;
+  const paused = isPaused(task);
+  const remaining = remainingMs(task, now);
+  const progress = Math.min(1, progressOf(task, now));
   const urgent = remaining < 60_000 * 5;
   const { h, m, s } = decompose(remaining);
-  const tone = remaining <= 0 ? "text-orange" : urgent ? "text-amber" : "text-cyan";
+  const tone = paused ? "ember-pulse text-muted" : remaining <= 0 ? "text-orange" : urgent ? "text-amber" : "text-cyan";
 
   return (
     <motion.div
@@ -566,7 +410,7 @@ function InPageMiniFloat({
         top: pos.y,
         backdropFilter: "blur(24px) saturate(140%)",
         WebkitBackdropFilter: "blur(24px) saturate(140%)",
-        background: "rgba(10,10,10,0.92)",
+        background: "color-mix(in srgb, var(--color-ink) 92%, transparent)",
       }}
       onPointerDown={(e) => {
         if ((e.target as HTMLElement).closest("button")) return;
@@ -576,19 +420,14 @@ function InPageMiniFloat({
       }}
       onPointerMove={(e) => {
         if (!dragging.current) return;
-        setPos({
-          x: e.clientX - offset.current.x,
-          y: e.clientY - offset.current.y,
-        });
+        setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
       }}
       onPointerUp={() => {
         dragging.current = false;
       }}
     >
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-2">
-        <span className="max-w-[200px] truncate font-mono text-[10px] text-muted">
-          {task.title}
-        </span>
+        <span className="max-w-[200px] truncate font-mono text-[10px] text-muted">{task.title}</span>
         <button
           onClick={onClose}
           aria-label="Close mini timer"
@@ -598,38 +437,37 @@ function InPageMiniFloat({
         </button>
       </div>
       <div className="flex flex-col items-center px-4 py-4">
-        <span
-          className={`display text-[46px] leading-none tabular-nums ${tone}`}
-        >
+        <span className={`display text-[46px] leading-none tabular-nums ${tone}`}>
           {pad(h)}:{pad(m)}:{pad(s)}
         </span>
-        <div
-          className="mt-3 h-1.5 w-full overflow-hidden rounded-full"
-          style={{ background: "var(--color-bar-off)" }}
-        >
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--color-bar-off)" }}>
           <div
             className="h-full rounded-full transition-all duration-300"
             style={{
               width: `${progress * 100}%`,
-              background:
-                remaining <= 0
-                  ? "var(--color-orange)"
-                  : urgent
-                  ? "var(--color-amber)"
-                  : "var(--color-cyan)",
+              background: paused
+                ? "var(--color-muted)"
+                : remaining <= 0
+                ? "var(--color-orange)"
+                : urgent
+                ? "var(--color-amber)"
+                : "var(--color-cyan)",
             }}
           />
         </div>
-        <button
-          onClick={() => {
-            onDone();
-            onClose();
-          }}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-lime/30 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-lime transition-colors hover:bg-lime hover:text-[color:var(--color-lime-ink)]"
-        >
-          <Check aria-hidden className="h-3.5 w-3.5" strokeWidth={3} />
-          done
-        </button>
+        <div className="mt-3 flex w-full items-center gap-2">
+          <PauseSwitch paused={paused} onToggle={onTogglePause} />
+          <button
+            onClick={() => {
+              onDone();
+              onClose();
+            }}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-lime/30 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-lime transition-colors hover:bg-lime hover:text-[color:var(--color-lime-ink)]"
+          >
+            <Check aria-hidden className="h-3.5 w-3.5" strokeWidth={3} />
+            done
+          </button>
+        </div>
       </div>
     </motion.div>
   );

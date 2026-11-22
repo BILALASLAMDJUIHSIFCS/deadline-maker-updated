@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ChevronDown, Palette } from "lucide-react";
+import { Check, ChevronDown, Moon, Palette, Sparkles, Sun } from "lucide-react";
 import { THEMES, type ThemeId, type ThemeMeta } from "../lib/theme";
 
 const GROUPS: { id: ThemeMeta["group"]; label: string }[] = [
   { id: "original", label: "originals" },
-  { id: "inspired", label: "inspired by real sites" },
+  { id: "collection", label: "new collection · 10 kits" },
 ];
 
 type Props = { value: ThemeId; onChange: (id: ThemeId) => void };
@@ -83,8 +83,24 @@ export default function ThemePicker({ value, onChange }: Props) {
                       >
                         <Swatch colors={t.swatch} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-semibold text-fg">{t.name}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-[13px] font-semibold text-fg">{t.name}</span>
+                            {t.mode === "light" ? (
+                              <Sun aria-label="light theme" className="h-3 w-3 shrink-0 text-faint" />
+                            ) : (
+                              <Moon aria-label="dark theme" className="h-3 w-3 shrink-0 text-faint" />
+                            )}
+                          </span>
                           <span className="block truncate text-[11px] text-muted">{t.tagline}</span>
+                          <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-faint">
+                            <Sparkles aria-hidden className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">{t.motion}</span>
+                          </span>
+                          {t.engine && (
+                            <span className="tracked mt-1 inline-block rounded border border-orange/40 px-1 py-px text-[7px] text-orange">
+                              {t.engine}
+                            </span>
+                          )}
                         </span>
                         {on && <Check aria-hidden className="h-3.5 w-3.5 shrink-0 text-orange" />}
                       </button>

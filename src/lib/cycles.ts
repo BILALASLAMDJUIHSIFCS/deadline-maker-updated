@@ -1,4 +1,5 @@
 import { dayKey, lastSevenDays, type Task } from "./storage";
+import { durationMs } from "./taskTime";
 
 // The daily quota: 16h 30m of work, measured in 30-minute cycles → 33 cycles.
 export const CYCLE_MIN = 30;
@@ -6,7 +7,7 @@ export const DAILY_TARGET_MIN = 16 * 60 + 30;
 export const DAILY_CYCLES = DAILY_TARGET_MIN / CYCLE_MIN;
 
 // A todo is worth the duration it was set for (e.g. a 50m todo = 1⅔ cycles).
-export const taskMinutes = (t: Task) => Math.max(0, Math.round((t.deadline - t.createdAt) / 60_000));
+export const taskMinutes = (t: Task) => Math.max(0, Math.round(durationMs(t) / 60_000));
 
 // Resolved tasks count toward the day they were finished/missed; live ones
 // toward the day they were created.

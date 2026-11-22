@@ -101,7 +101,7 @@ export default function TodoList({ items, commit, tasksById, now, onUse }: Props
   return (
     <section
       aria-labelledby="later-list-title"
-      className="surface relative isolate mt-6 rounded-2xl border border-line bg-panel"
+      className="surface panel-fx relative isolate mt-6 rounded-2xl border border-line bg-panel"
     >
       <CornerGlow />
       <div className="flex items-center gap-2 border-b border-line-soft px-5 py-3">
@@ -125,7 +125,7 @@ export default function TodoList({ items, commit, tasksById, now, onUse }: Props
             />
             <button
               type="submit"
-              className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg bg-orange text-[color:var(--color-orange-ink)] transition-transform active:scale-95"
+              className="btn-primary grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg bg-orange text-[color:var(--color-orange-ink)] transition-transform active:scale-95"
               aria-label="Add task"
             >
               <Plus aria-hidden className="h-5 w-5" strokeWidth={2.5} />

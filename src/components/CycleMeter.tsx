@@ -31,7 +31,7 @@ export default function CycleMeter({ tasks, now }: Props) {
   return (
     <section
       aria-labelledby="cycle-meter-title"
-      className="surface relative isolate overflow-hidden rounded-2xl border border-line bg-panel"
+      className="surface panel-fx relative isolate overflow-hidden rounded-2xl border border-line bg-panel"
     >
       <CornerGlow />
       <div className="flex items-center gap-2 border-b border-line-soft px-5 py-3">

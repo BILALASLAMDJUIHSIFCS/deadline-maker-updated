@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 type Props = {
   progress: number; // 0..1 filled
   count?: number;
@@ -14,7 +16,8 @@ const TONE: Record<string, string> = {
   muted: "var(--color-muted)",
 };
 
-// Vertical bar strip — the signature array motif from the reference system.
+// Vertical bar strip — the signature array motif. Each cell exposes
+// data-on / data-tone / --i so a theme can restyle or animate it.
 export default function BarArray({ progress, count = 34, tone = "orange", className }: Props) {
   const filled = Math.max(0, Math.min(count, Math.round(progress * count)));
   return (
@@ -25,11 +28,16 @@ export default function BarArray({ progress, count = 34, tone = "orange", classN
         return (
           <div
             key={i}
-            className="flex-1 rounded-[1px] transition-colors duration-300"
-            style={{
-              backgroundColor: on ? TONE[tone] : "var(--color-bar-off)",
-              opacity: on ? (edge ? 1 : 0.85) : 1,
-            }}
+            data-on={on}
+            data-tone={tone}
+            className="bar-cell flex-1 rounded-[1px] transition-colors duration-300"
+            style={
+              {
+                "--i": i,
+                backgroundColor: on ? TONE[tone] : "var(--color-bar-off)",
+                opacity: on ? (edge ? 1 : 0.85) : 1,
+              } as CSSProperties
+            }
           />
         );
       })}

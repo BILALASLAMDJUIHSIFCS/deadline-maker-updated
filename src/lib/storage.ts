@@ -17,6 +17,8 @@ export type Task = {
   resolvedAt?: number;
   day: string; // YYYY-MM-DD the task was created
   updatedAt?: number; // last mutation, used to resolve sync conflicts
+  pausedAt?: number | null; // set while the timer is paused
+  pausedMs?: number; // total time spent paused (deadline is pushed back by this)
 };
 
 type TaskRow = {
@@ -29,7 +31,15 @@ type TaskRow = {
   resolved_at: number | null;
   day: string;
   updated_at: number;
+  paused_at?: number | null;
+  paused_ms?: number | null;
 };
+
+// Flipped off if the database hasn't run the pause migration yet, so sync keeps
+// working (pause state then stays on this device until it's applied).
+let pauseColumns = true;
+const isMissingColumn = (error: { code?: string; message?: string }) =>
+  error.code === "PGRST204" || error.code === "42703" || /column/i.test(error.message ?? "");
 
 const KEY = "deadline-maker:v1";
 const TABLE = "tasks";
@@ -87,17 +97,24 @@ export function mergeTasks(local: Task[], remote: Task[]): Task[] {
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
 }
 
-const toRow = (t: Task): TaskRow => ({
-  id: t.id,
-  title: t.title,
-  consequence: t.consequence,
-  created_at: t.createdAt,
-  deadline: t.deadline,
-  status: t.status,
-  resolved_at: t.resolvedAt ?? null,
-  day: t.day,
-  updated_at: version(t),
-});
+const toRow = (t: Task): TaskRow => {
+  const row: TaskRow = {
+    id: t.id,
+    title: t.title,
+    consequence: t.consequence,
+    created_at: t.createdAt,
+    deadline: t.deadline,
+    status: t.status,
+    resolved_at: t.resolvedAt ?? null,
+    day: t.day,
+    updated_at: version(t),
+  };
+  if (pauseColumns) {
+    row.paused_at = t.pausedAt ?? null;
+    row.paused_ms = t.pausedMs ?? 0;
+  }
+  return row;
+};
 
 const fromRow = (r: TaskRow): Task => ({
   id: r.id,
@@ -109,6 +126,8 @@ const fromRow = (r: TaskRow): Task => ({
   resolvedAt: r.resolved_at == null ? undefined : Number(r.resolved_at),
   day: r.day,
   updatedAt: Number(r.updated_at),
+  pausedAt: r.paused_at == null ? null : Number(r.paused_at),
+  pausedMs: r.paused_ms == null ? 0 : Number(r.paused_ms),
 });
 
 export async function fetchRemoteTasks(): Promise<Task[] | null> {
@@ -130,7 +149,14 @@ async function pushTasks(tasks: Task[]): Promise<void> {
   if (!client) return;
   await tracked("save tasks", async () => {
     if (tasks.length) {
-      const { error } = await client.from(TABLE).upsert(tasks.map(toRow), { onConflict: "id" });
+      let { error } = await client.from(TABLE).upsert(tasks.map(toRow), { onConflict: "id" });
+      if (error && pauseColumns && isMissingColumn(error)) {
+        console.warn(
+          "[supabase] tasks.paused_at / paused_ms missing — run supabase/migrations/20261123000000_pause_and_new_themes.sql. Pause state stays local until then."
+        );
+        pauseColumns = false;
+        ({ error } = await client.from(TABLE).upsert(tasks.map(toRow), { onConflict: "id" }));
+      }
       if (error) throw error;
     }
     // Mirror the local 7-day prune in the database.

@@ -37,7 +37,7 @@ export function scheduleNotification(task: Task): void {
 export function armAll(tasks: Task[]): void {
   const now = Date.now();
   tasks.forEach((t) => {
-    if (t.status === "active" && t.deadline > now) scheduleNotification(t);
+    if (t.status === "active" && t.pausedAt == null && t.deadline > now) scheduleNotification(t);
   });
 }
 

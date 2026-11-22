@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Check, ChevronDown, Clock, CornerDownRight, Timer, Trash2 } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, Clock, CornerDownRight, Pause, Timer, Trash2 } from "lucide-react";
 import TagPicker, { TagChip } from "./TagPicker";
 import { formatBudget, parseTodoText } from "../lib/todoTime";
+import { elapsedMs, isPaused } from "../lib/taskTime";
 import type { Task } from "../lib/storage";
 import type { Sub, Tag, Todo } from "../lib/todos";
 
@@ -12,32 +13,46 @@ export function isDone(t: Todo): boolean {
 // Hover-revealed on pointer devices, always visible on touch and keyboard focus.
 const REVEAL = "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100";
 
-type Budget = { minutes: number; live: boolean } | null;
+type Budget = { minutes: number; live: boolean; paused: boolean } | null;
 
-// Time left on an item: drawn down live while its linked deadline is running.
+// Time left on an item: drawn down live while its linked deadline is running
+// (and frozen while that deadline is paused).
 function budgetOf(text: string, taskId: string | null | undefined, tasksById: Map<string, Task>, now: number): Budget {
   const { minutes } = parseTodoText(text);
   if (minutes == null) return null;
   const task = taskId ? tasksById.get(taskId) : undefined;
   if (task && task.status === "active") {
-    const used = (Math.min(now, task.deadline) - task.createdAt) / 60_000;
-    return { minutes: Math.max(0, Math.ceil(minutes - used)), live: true };
+    const used = elapsedMs(task, now) / 60_000;
+    return { minutes: Math.max(0, Math.ceil(minutes - used)), live: true, paused: isPaused(task) };
   }
-  return { minutes, live: false };
+  return { minutes, live: false, paused: false };
 }
 
 function BudgetChip({ budget, small }: { budget: NonNullable<Budget>; small?: boolean }) {
-  const Icon = budget.live ? Timer : Clock;
+  const Icon = budget.paused ? Pause : budget.live ? Timer : Clock;
   return (
     <span
-      title={budget.live ? "Counting down with its live deadline" : "Time budget"}
+      title={
+        budget.paused
+          ? "Its deadline is paused — budget is frozen"
+          : budget.live
+          ? "Counting down with its live deadline"
+          : "Time budget"
+      }
       className={`tracked inline-flex shrink-0 items-center gap-1 rounded border leading-none tabular-nums ${
         small ? "px-1 py-0.5 text-[8px]" : "px-1.5 py-0.5 text-[9px]"
-      } ${budget.live ? "border-cyan/40 bg-cyan/10 text-cyan" : "border-line bg-panel-2 text-muted"}`}
+      } ${
+        budget.paused
+          ? "border-orange/40 bg-orange-soft text-orange"
+          : budget.live
+          ? "border-cyan/40 bg-cyan/10 text-cyan"
+          : "border-line bg-panel-2 text-muted"
+      }`}
     >
       <Icon aria-hidden className={small ? "h-2.5 w-2.5" : "h-3 w-3"} />
       {formatBudget(budget.minutes)}
-      {budget.live && <span className="ember-pulse ml-0.5 h-1 w-1 rounded-full bg-cyan" />}
+      {budget.paused ? " · paused" : null}
+      {budget.live && !budget.paused && <span className="ember-pulse ml-0.5 h-1 w-1 rounded-full bg-cyan" />}
     </span>
   );
 }

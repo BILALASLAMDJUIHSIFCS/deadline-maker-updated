@@ -16,10 +16,12 @@ import {
   Cloud,
   CloudAlert,
   CloudOff,
+  Link2,
   Lock,
   Maximize2,
   PictureInPicture2,
   RefreshCw,
+  X,
 } from "lucide-react";
 import ProgressPanel from "./components/ProgressPanel";
 import { useTodos } from "./lib/useTodos";
@@ -48,6 +50,19 @@ import {
 } from "./lib/notifications";
 import { saveDailySnapshot, snapshotDay } from "./lib/history";
 import FullscreenTimer, { MiniFloat } from "./components/FullscreenTimer";
+import PauseSwitch from "./components/PauseSwitch";
+import ThemeFX from "./components/fx/ThemeFX";
+import ComposerDecor from "./components/fx/ComposerDecor";
+import TurbineOrb from "./components/fx/TurbineOrb";
+import {
+  elapsedMs,
+  isPaused,
+  pauseTask,
+  progressOf,
+  remainingMs,
+  resumeTask,
+} from "./lib/taskTime";
+import { formatBudget } from "./lib/todoTime";
 
 // Quick presets, in minutes — mirrors the fast-select menu.
 const QUICK = [
@@ -112,11 +127,12 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeId>(() => loadThemePref().theme);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [miniId, setMiniId] = useState<string | null>(null);
+  const [hoverQuick, setHoverQuick] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const todos = useTodos();
   // The later-list item last sent to the composer; the next deadline locked
   // with that same title gets linked to it so its time budget follows the timer.
-  const [pendingLink, setPendingLink] = useState<(SendRef & { title: string }) | null>(null);
+  const [pendingLink, setPendingLink] = useState<(SendRef & { title: string; budget: number }) | null>(null);
   // Tasks whose final-10s warning has already sounded, so it fires only once.
   const warned = useRef<Set<string>>(new Set());
 
@@ -125,10 +141,10 @@ export default function App() {
   function seedWarnings(list: Task[]) {
     list.forEach((task) => {
       if (task.status !== "active") return;
-      const total = task.deadline - task.createdAt;
-      const p = total > 0 ? (Date.now() - task.createdAt) / total : 1;
+      const p = progressOf(task, Date.now());
       if (p >= 0.5) warned.current.add(`${task.id}:50`);
       if (p >= 0.8) warned.current.add(`${task.id}:80`);
+      if (isPaused(task)) return; // countdown re-arms on resume
       // If we land within the countdown window, arm it straight away
       // (already-elapsed seconds are skipped) and mark it done so the tick
       // doesn't schedule it a second time.
@@ -212,10 +228,9 @@ export default function App() {
     setTasks((prev) => {
       let changed = false;
       const next = prev.map((t) => {
-        if (t.status !== "active") return t;
-        const total = t.deadline - t.createdAt;
+        if (t.status !== "active" || isPaused(t)) return t;
         const remaining = t.deadline - now;
-        const progress = total > 0 ? (now - t.createdAt) / total : 1;
+        const progress = progressOf(t, now);
         const fire = (key: string, dur: number) => {
           const k = `${t.id}:${key}`;
           if (!warned.current.has(k)) {
@@ -261,8 +276,9 @@ export default function App() {
   const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   // When a deadline linked to a later-list item ends (done early or missed),
-  // subtract the time actually spent from that item's budget: a 1h item that
-  // ran for 40m is left with 20m. Fully used budgets drop their time suffix.
+  // subtract the time actually spent on the clock (pauses excluded) from that
+  // item's budget: a 10m item sent with a 4m timer is left with 6m. Fully used
+  // budgets drop their time suffix.
   const { items: todoItems, commit: commitTodos } = todos;
   useEffect(() => {
     const settle = (text: string, taskId: string | null | undefined) => {
@@ -270,8 +286,7 @@ export default function App() {
       if (!task || task.status === "active") return null;
       const { title, minutes } = parseTodoText(text);
       if (minutes == null) return { text };
-      const end = Math.min(task.resolvedAt ?? task.deadline, task.deadline);
-      const used = (end - task.createdAt) / 60_000;
+      const used = elapsedMs(task, Date.now()) / 60_000;
       return { text: withBudget(title, Math.round(minutes - used)) };
     };
     const needsSettle = todoItems.some(
@@ -297,13 +312,45 @@ export default function App() {
     );
   }, [tasksById, todoItems, commitTodos]);
 
+  // Send a later-list item to the composer. Its budget pre-fills the duration,
+  // but you can pick any shorter (or longer) time — whatever actually runs on
+  // the clock is what gets subtracted from the item when the deadline ends.
   function sendToComposer(ref: SendRef) {
     const { title: name, minutes: budget } = parseTodoText(ref.text);
+    const item = todoItems.find((t) => t.id === ref.todoId);
+    const linkedTaskId = ref.subId ? item?.subs.find((s) => s.id === ref.subId)?.taskId : item?.taskId;
+    const running = linkedTaskId ? tasksById.get(linkedTaskId)?.status === "active" : false;
     setTitle(name);
     if (budget) applyQuick(budget);
-    setPendingLink(budget ? { ...ref, title: name } : null);
+    if (running) {
+      setPendingLink(null);
+      setFlash("ALREADY RUNNING — FINISH IT FIRST");
+      window.setTimeout(() => setFlash(null), 2600);
+    } else {
+      setPendingLink(budget ? { ...ref, title: name, budget } : null);
+    }
     titleRef.current?.focus();
     titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function togglePause(id: string) {
+    const at = Date.now();
+    const cur = tasks.find((t) => t.id === id);
+    if (!cur || cur.status !== "active") return;
+    const updated = isPaused(cur) ? resumeTask(cur, at) : pauseTask(cur, at);
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === id ? updated : t));
+      persistTasks(next);
+      return next;
+    });
+    // Countdown beeps are queued on the audio clock, so silence them and let
+    // the tick re-arm any that should still play.
+    stopAlarm();
+    warned.current.forEach((k) => {
+      if (k.endsWith(":cd")) warned.current.delete(k);
+    });
+    if (isPaused(updated)) cancelNotification(id);
+    else scheduleNotification(updated);
   }
 
   function linkTodo(ref: SendRef, taskId: string) {
@@ -357,7 +404,7 @@ export default function App() {
     setTasks(next);
     persistTasks(next);
     scheduleNotification(task);
-    if (pendingLink && pendingLink.title === task.title) linkTodo(pendingLink, task.id);
+    if (pendingLink) linkTodo(pendingLink, task.id);
     setPendingLink(null);
     setTitle("");
     setConsequence("");
@@ -367,9 +414,10 @@ export default function App() {
   function completeTask(id: string) {
     setTasks((prev) => {
       const at = Date.now();
+      // A paused task is resumed first so the paused gap isn't counted as work.
       const next = prev.map((t) =>
         t.id === id && t.status === "active"
-          ? { ...t, status: "done" as const, resolvedAt: at, updatedAt: at }
+          ? { ...resumeTask(t, at), status: "done" as const, resolvedAt: at, updatedAt: at }
           : t
       );
       persistTasks(next);
@@ -391,19 +439,27 @@ export default function App() {
     [tasks]
   );
 
+  const nearest = active.find((t) => !isPaused(t));
+  const orb = { running: !!nearest, progress: nearest ? progressOf(nearest, now) : 0 };
+  const budgetLeft = pendingLink ? Math.max(0, pendingLink.budget - totalMinutes) : 0;
+
   return (
     <div className="bg-app min-h-full w-full">
       {/* subtle top glow (theme-controlled) */}
       <div className="top-glow pointer-events-none fixed inset-x-0 top-0 h-64" />
+      {/* theme signature animation layer */}
+      <ThemeFX theme={theme} />
       <div className="relative mx-auto grid max-w-[1200px] gap-6 px-4 py-7 lg:grid-cols-[minmax(0,1fr)_408px] lg:py-12 lg:px-8">
         {/* ── Left column ─────────────────────────────── */}
         <div className="min-w-0">
-          <Header perm={perm} onEnable={ensurePerm} theme={theme} onTheme={changeTheme} />
+          <Header perm={perm} onEnable={ensurePerm} theme={theme} onTheme={changeTheme} orb={orb} />
 
           {/* Composer */}
+          <div className="composer-wrap relative mt-6">
+          <ComposerDecor theme={theme} />
           <form
             onSubmit={createTask}
-            className="surface relative isolate mt-6 overflow-hidden rounded-2xl border border-line bg-panel"
+            className="surface panel-fx relative isolate overflow-hidden rounded-2xl border border-line bg-panel"
           >
             <CornerGlow />
             <div className="flex items-center gap-2 border-b border-line-soft px-5 py-3">
@@ -422,6 +478,37 @@ export default function App() {
                 className="w-full bg-transparent font-mono text-2xl font-semibold text-fg outline-none placeholder:text-faint sm:text-[28px]"
               />
 
+              <AnimatePresence initial={false}>
+                {pendingLink && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-orange/30 bg-orange-soft px-3 py-2">
+                      <span className="tracked flex items-center gap-1.5 text-[9px] text-orange">
+                        <Link2 aria-hidden className="h-3.5 w-3.5" />
+                        linked to later list
+                      </span>
+                      <span className="font-mono text-[11px] tabular-nums text-muted">
+                        {formatBudget(pendingLink.budget)} budget − {totalMinutes > 0 ? fmtDuration(totalMinutes).toLowerCase() : "0m"} run ={" "}
+                        <span className="font-semibold text-fg">{budgetLeft > 0 ? `${formatBudget(budgetLeft)} left` : "all used"}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPendingLink(null)}
+                        aria-label="Unlink from later list"
+                        title="Unlink — the item's budget won't change"
+                        className="ml-auto grid h-6 w-6 place-items-center rounded text-muted transition-colors hover:text-orange"
+                      >
+                        <X aria-hidden className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <label className="mt-6 block">
                 <span className="tracked text-[10px] text-faint">If not completed…</span>
                 <input
@@ -438,7 +525,10 @@ export default function App() {
                   <span className="tracked text-[10px] text-faint">Quick set</span>
                   <div className="h-px flex-1 bg-line-soft" />
                 </div>
-                <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                <div
+                  className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6"
+                  onPointerLeave={() => setHoverQuick(null)}
+                >
                   {QUICK.map((q) => {
                     const on = totalMinutes === q.m;
                     const num = q.label.replace(/[a-z]/gi, "");
@@ -447,13 +537,23 @@ export default function App() {
                       <button
                         key={q.label}
                         type="button"
+                        aria-pressed={on}
                         onClick={() => applyQuick(q.m)}
-                        className={`relative flex flex-col items-center justify-center rounded-lg py-2.5 transition-all active:scale-[0.94] ${
+                        onPointerEnter={() => setHoverQuick(q.label)}
+                        className={`quick-btn relative isolate flex flex-col items-center justify-center rounded-lg py-2.5 transition-all active:scale-[0.94] ${
                           on
                             ? "bg-orange text-[color:var(--color-orange-ink)] ring-1 ring-inset ring-[color:var(--color-orange-ink)]/20"
                             : "border border-line bg-panel-2 text-muted hover:border-orange/60 hover:text-fg"
                         }`}
                       >
+                        {hoverQuick === q.label && !on && (
+                          <motion.span
+                            layoutId="quick-hover-pill"
+                            aria-hidden
+                            transition={{ type: "spring", stiffness: 520, damping: 38 }}
+                            className="quick-hover-pill absolute inset-0 -z-10 rounded-lg bg-orange-soft ring-1 ring-inset ring-orange/25"
+                          />
+                        )}
                         <span className="flex items-baseline gap-0.5">
                           <span className="display text-xl leading-none tabular-nums">{num}</span>
                           <span className="tracked text-[9px] opacity-70">{unit}</span>
@@ -503,7 +603,7 @@ export default function App() {
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <button
                   type="submit"
-                  className="group relative overflow-hidden rounded-lg bg-orange px-6 py-3.5 font-mono text-sm font-bold uppercase tracking-wider text-[color:var(--color-orange-ink)] transition-transform active:scale-[0.98]"
+                  className="btn-primary group relative overflow-hidden rounded-lg bg-orange px-6 py-3.5 font-mono text-sm font-bold uppercase tracking-wider text-[color:var(--color-orange-ink)] transition-transform active:scale-[0.98]"
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     <Lock aria-hidden className="h-4 w-4" strokeWidth={2.5} />
@@ -528,6 +628,7 @@ export default function App() {
               </div>
             </div>
           </form>
+          </div>
 
           {/* Active */}
           <SectionLabel text="live deadlines" count={active.length} accent="text-cyan" />
@@ -539,6 +640,7 @@ export default function App() {
                   task={t}
                   now={now}
                   onDone={() => completeTask(t.id)}
+                  onPause={() => togglePause(t.id)}
                   onExpand={() => setExpandedId(t.id)}
                   onMini={() => setMiniId(t.id)}
                 />
@@ -617,6 +719,7 @@ export default function App() {
               key={t.id}
               task={t}
               onDone={() => completeTask(t.id)}
+              onTogglePause={() => togglePause(t.id)}
               onClose={() => setExpandedId(null)}
             />
           ) : null;
@@ -632,6 +735,7 @@ export default function App() {
               key={t.id}
               task={t}
               onDone={() => completeTask(t.id)}
+              onTogglePause={() => togglePause(t.id)}
               onClose={() => setMiniId(null)}
             />
           ) : null;
@@ -674,14 +778,17 @@ function Header({
   onEnable,
   theme,
   onTheme,
+  orb,
 }: {
   perm: NotificationPermission;
   onEnable: () => void;
   theme: ThemeId;
   onTheme: (id: ThemeId) => void;
+  orb: { running: boolean; progress: number };
 }) {
   return (
     <header className="flex flex-wrap items-center gap-4">
+      {theme === "turbine" && <TurbineOrb running={orb.running} progress={orb.progress} />}
       <div className="min-w-0">
         <h1 className="display flex items-center text-3xl font-extrabold tracking-tight text-fg sm:text-[40px]">
           DEADLINE<span className="text-orange">//</span>MAKER
@@ -709,18 +816,33 @@ function Header({
   );
 }
 
-function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: number; onDone?: () => void; onExpand?: () => void; onMini?: () => void }) {
-  const total = task.deadline - task.createdAt;
-  const elapsed = Math.min(total, now - task.createdAt);
-  const remaining = task.deadline - now;
-  const progress = total > 0 ? elapsed / total : 1;
-  const urgent = task.status === "active" && remaining < 60_000 * 5;
+function TaskCard({
+  task,
+  now,
+  onDone,
+  onPause,
+  onExpand,
+  onMini,
+}: {
+  task: Task;
+  now: number;
+  onDone?: () => void;
+  onPause?: () => void;
+  onExpand?: () => void;
+  onMini?: () => void;
+}) {
+  const remaining = remainingMs(task, now);
+  const progress = progressOf(task, now);
+  const paused = isPaused(task);
+  const urgent = task.status === "active" && !paused && remaining < 60_000 * 5;
   const missed = task.status === "missed";
   const done = task.status === "done";
-  const tone: "miss" | "amber" | "lime" | "cyan" = missed
+  const tone: "miss" | "amber" | "lime" | "cyan" | "muted" = missed
     ? "miss"
     : done
     ? "lime"
+    : paused
+    ? "muted"
     : urgent
     ? "amber"
     : "cyan";
@@ -732,8 +854,16 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.97 }}
       transition={{ type: "spring", stiffness: 320, damping: 30 }}
-      className={`surface overflow-hidden rounded-xl border bg-panel p-4 sm:p-5 ${
-        missed ? "border-miss/40" : done ? "border-lime/25" : urgent ? "border-amber/50" : "border-cyan/30"
+      className={`surface panel-fx relative isolate overflow-hidden rounded-xl border bg-panel p-4 sm:p-5 ${
+        missed
+          ? "border-miss/40"
+          : done
+          ? "border-lime/25"
+          : paused
+          ? "border-dashed border-line"
+          : urgent
+          ? "border-amber/50"
+          : "border-cyan/30"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -758,7 +888,8 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
             {missed ? "missed" : "done"}
           </span>
         ) : (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {onPause && <PauseSwitch paused={paused} onToggle={onPause} />}
             {onMini && (
               <button
                 onClick={onMini}
@@ -795,13 +926,21 @@ function TaskCard({ task, now, onDone, onExpand, onMini }: { task: Task; now: nu
       <div className="mt-4 flex items-end justify-between gap-4">
         <span
           className={`display text-3xl leading-none tabular-nums sm:text-4xl ${
-            missed ? "text-miss" : done ? "text-lime" : urgent ? "text-amber" : "text-cyan"
+            missed
+              ? "text-miss"
+              : done
+              ? "text-lime"
+              : paused
+              ? "ember-pulse text-muted"
+              : urgent
+              ? "text-amber"
+              : "text-cyan"
           }`}
         >
           {task.status === "active" ? fmtRemaining(remaining) : fmtRemaining(0)}
         </span>
-        <span className="tracked mb-0.5 text-[9px] text-faint">
-          {task.status === "active" ? "remaining" : "elapsed"}
+        <span className={`tracked mb-0.5 text-[9px] ${paused ? "text-orange" : "text-faint"}`}>
+          {task.status === "active" ? (paused ? "paused" : "remaining") : "elapsed"}
         </span>
       </div>
 
