@@ -55,6 +55,7 @@ import ThemeFX from "./components/fx/ThemeFX";
 import ComposerDecor from "./components/fx/ComposerDecor";
 import TurbineOrb from "./components/fx/TurbineOrb";
 import {
+  durationMs,
   elapsedMs,
   isPaused,
   pauseTask,
@@ -276,18 +277,21 @@ export default function App() {
   const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   // When a deadline linked to a later-list item ends (done early or missed),
-  // subtract the time actually spent on the clock (pauses excluded) from that
-  // item's budget: a 10m item sent with a 4m timer is left with 6m. Fully used
-  // budgets drop their time suffix.
+  // subtract the total time selected for that completed deadline (or elapsed time if missed)
+  // from that item's budget. Fully used budgets drop their time suffix.
   const { items: todoItems, commit: commitTodos } = todos;
   useEffect(() => {
     const settle = (text: string, taskId: string | null | undefined) => {
       const task = taskId ? tasksById.get(taskId) : undefined;
       if (!task || task.status === "active") return null;
       const { title, minutes } = parseTodoText(text);
-      if (minutes == null) return { text };
-      const used = elapsedMs(task, Date.now()) / 60_000;
-      return { text: withBudget(title, Math.round(minutes - used)) };
+      if (minutes == null) return { text, done: task.status === "done" };
+      // When completed via Done, subtract the total duration selected for that deadline.
+      // If missed/expired, subtract the elapsed time.
+      const selected = Math.max(1, Math.round(durationMs(task) / 60_000));
+      const used = task.status === "done" ? selected : Math.round(elapsedMs(task, Date.now()) / 60_000);
+      const left = Math.max(0, minutes - used);
+      return { text: withBudget(title, left), done: task.status === "done" && left === 0 };
     };
     const needsSettle = todoItems.some(
       (t) => settle(t.text, t.taskId) || t.subs.some((s) => settle(s.text, s.taskId))
@@ -297,14 +301,17 @@ export default function App() {
       prev.map((t): Todo => {
         let next = t;
         const own = settle(t.text, t.taskId);
-        if (own) next = { ...next, text: own.text, taskId: null };
+        if (own) next = { ...next, text: own.text, taskId: null, done: own.done ? true : next.done };
         if (t.subs.some((s) => settle(s.text, s.taskId))) {
+          const nextSubs = t.subs.map((s) => {
+            const r = settle(s.text, s.taskId);
+            return r ? { ...s, text: r.text, taskId: null, done: r.done ? true : s.done } : s;
+          });
+          const allSubsDone = nextSubs.length > 0 && nextSubs.every((s) => s.done);
           next = {
             ...next,
-            subs: t.subs.map((s) => {
-              const r = settle(s.text, s.taskId);
-              return r ? { ...s, text: r.text, taskId: null } : s;
-            }),
+            subs: nextSubs,
+            done: allSubsDone ? true : next.done,
           };
         }
         return next;
@@ -412,8 +419,9 @@ export default function App() {
   }
 
   function completeTask(id: string) {
+    const target = tasks.find((t) => t.id === id);
+    const at = Date.now();
     setTasks((prev) => {
-      const at = Date.now();
       // A paused task is resumed first so the paused gap isn't counted as work.
       const next = prev.map((t) =>
         t.id === id && t.status === "active"
@@ -425,6 +433,52 @@ export default function App() {
     });
     cancelNotification(id);
     stopAlarm(); // silence the final-10s warning if it was already ringing
+
+    if (target) {
+      // The total time selected for this completed deadline in minutes
+      const selectedMin = Math.max(1, Math.round(durationMs(target) / 60_000));
+      commitTodos((prev) =>
+        prev.map((t) => {
+          let updated = t;
+          const isMainLinked =
+            t.taskId === id ||
+            (!t.taskId &&
+              !t.subs.some((s) => s.taskId === id) &&
+              parseTodoText(t.text).title.trim().toLowerCase() === target.title.trim().toLowerCase());
+
+          if (isMainLinked) {
+            const { title, minutes } = parseTodoText(t.text);
+            const left = minutes != null ? Math.max(0, minutes - selectedMin) : null;
+            updated = {
+              ...updated,
+              text: withBudget(title, left),
+              taskId: null,
+              done: left === 0 ? true : updated.done,
+            };
+          }
+          if (t.subs.some((s) => s.taskId === id)) {
+            const nextSubs = updated.subs.map((s) => {
+              if (s.taskId !== id) return s;
+              const { title, minutes } = parseTodoText(s.text);
+              const left = minutes != null ? Math.max(0, minutes - selectedMin) : null;
+              return {
+                ...s,
+                text: withBudget(title, left),
+                taskId: null,
+                done: left === 0 ? true : s.done,
+              };
+            });
+            const allSubsDone = nextSubs.length > 0 && nextSubs.every((s) => s.done);
+            updated = {
+              ...updated,
+              subs: nextSubs,
+              done: allSubsDone ? true : updated.done,
+            };
+          }
+          return updated;
+        })
+      );
+    }
   }
 
   const active = useMemo(

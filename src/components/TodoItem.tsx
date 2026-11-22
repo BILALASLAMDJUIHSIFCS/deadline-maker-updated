@@ -18,9 +18,14 @@ type Budget = { minutes: number; live: boolean; paused: boolean } | null;
 // Time left on an item: drawn down live while its linked deadline is running
 // (and frozen while that deadline is paused).
 function budgetOf(text: string, taskId: string | null | undefined, tasksById: Map<string, Task>, now: number): Budget {
-  const { minutes } = parseTodoText(text);
+  const { title, minutes } = parseTodoText(text);
   if (minutes == null) return null;
-  const task = taskId ? tasksById.get(taskId) : undefined;
+  let task = taskId ? tasksById.get(taskId) : undefined;
+  if (!task && !taskId) {
+    task = Array.from(tasksById.values()).find(
+      (t) => t.status === "active" && t.title.trim().toLowerCase() === title.trim().toLowerCase()
+    );
+  }
   if (task && task.status === "active") {
     const used = elapsedMs(task, now) / 60_000;
     return { minutes: Math.max(0, Math.ceil(minutes - used)), live: true, paused: isPaused(task) };
